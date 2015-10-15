@@ -562,29 +562,38 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 #'
 #' @export
 sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
-                      nChainsPerCore = 2, nCpuCores = 4) {
+                      nSamplesPerChain = 1000,
+                      nRepetitions = 2, nCpuCores = 4, procDir = NULL) {
 
-  rstanParallelSampler <- function(nCpuCores, stanData, rng_seed) {
+  rstanParallelSampler <- function(stanData, nSamplesPerChain,
+                                   rng_seed, nCpuCores, iRep, procDir ) {
+
     CL <- parallel::makeCluster(nCpuCores)
-    parallel::clusterExport(cl = CL, c("stanData", "rng_seed"), envir=environment())
+
+    parallel::clusterExport(cl = CL,
+                            c("stanData", "nSamplesPerChain", "rng_seed",
+                              "iRep", "procDir"),
+                            envir=environment())
+
     sflist <- parallel::parLapply(CL, 1:nCpuCores, fun = function(cid) {
-      # Make rstan available to the processors. This function won't work otherwise.
-      # So, I'm violating the principles in "R packages", p. 34, 82-84
+
+      # Make rstan available to the processors. This function won't work
+      # otherwise. So, I'm violating the principles in "R packages",
+      # p. 34, 82-84
       require(rstan, quietly = TRUE)
+
       rawSamples <- rstan::sampling(GcClust:::sm, data=stanData, init = "0",
                                     control = list(stepsize = 0.0001),
-                                    chains = 1, iter = 1000,
+                                    chains = 1, iter = nSamplesPerChain,
                                     seed = rng_seed, chain_id = cid,
                                     pars=c("theta", "mu1", "mu2",
-                                           "Sigma1", "Sigma2", "g", "log_lik"))
+                                           "Sigma1", "Sigma2", "g", "log_lik"),
+                                    save_dso = FALSE)
 
-      samples <- rstan::extract(rawSamples)
-      selectedTraces <- rstan::extract(rawSamples, permuted = FALSE,
-                                       pars=c("theta","mu1[1]","mu2[1]",
-                                              "Sigma1[1,1]","Sigma2[1,1]"))
-      # The specification for selectedTraces drops a dimension of size 1 (which
-      # apparently is used for multiple chains.)
-      return( list(samples = samples, selectedTraces = selectedTraces[, 1, ]))
+      fileName <- paste("RawSamples", iRep, "-", cid, ".dat", sep = "")
+      save( rawSamples, file = paste(procDir, "\\", fileName, sep = ""))
+      return(fileName)
+
     } )
 
     parallel::stopCluster(CL)
@@ -594,31 +603,23 @@ sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
   if(nCpuCores > parallel::detectCores())
     stop("The number of requested cpu's must be <= the number of actual cpu's.")
 
-  samplingParams <- list(
-    nChains = nChainsPerCore * nCpuCores,
-    nTotalSamplesPerChain = 1000,
-    nSamplesPerChain = 500  # after warm-up
-  )
-
   stanData <- list( M = nPCs,
                     N = nrow(transData$robustPCs),
                     Z = transData$robustPCs[,1:nPCs],
                     tauBounds = tauBounds)
 
-  stanSamples <- vector(mode="list")
-  stanSelectedTraces <- vector(mode="list")
-  for(i in 1:nChainsPerCore) {
-    tmp <- rstanParallelSampler(nCpuCores,stanData, sample.int(.Machine$integer.max,1))
-    for(j in 1:nCpuCores) {
-      index <- j + (i-1)*nCpuCores
-      stanSamples[[index]] <- tmp[[j]]$samples
-      stanSelectedTraces[[index]] <- tmp[[j]]$selectedTraces
-    }
+  fileNames <- NULL
+  for(i in 1:nRepetitions) {
+    rng_seed <- sample.int(.Machine$integer.max,1)
+    tmp <- rstanParallelSampler(stanData, nSamplesPerChain, rng_seed,
+                         nCpuCores, i, procDir )
+    fileNames <- c(fileNames, unlist(tmp))
   }
 
-  return( list(stanSamples = stanSamples,
-               stanSelectedTraces = stanSelectedTraces,
-               samplingParams = samplingParams) )
+  return(list(nChains = nRepetitions * nCpuCores,
+              nSamplesPerChain = nSamplesPerChain,
+              nSamplesPWU = nSamplesPerChain/2,
+              fileNames = fileNames))
 }
 
 #' @title Plot the likelihoods of the modes
@@ -706,96 +707,108 @@ plotModeLikelihoods <- function(fmmMode_mclust, fmmMode_rstan,
 #' }
 #'
 #' @export
-plotTraces <- function(fmmSamples) {
+plotSelectedTraces <- function(samplePars, procDir) {
 
-  selectedTraces <- fmmSamples$stanSelectedTraces
-
-  N <- length(selectedTraces)
-
-  origPar <- par( mfrow=c(3,1))
-  on.exit(par(origPar), add=TRUE)
-
+  N <- length(samplePars$fileNames)
   for(i in 1:N){
+
     devAskNewPage( ask = TRUE )
 
-    nSamples <- nrow(selectedTraces[[i]])
+    load( paste(procDir, "\\", samplePars$fileNames[i], sep = ""))
+    theSamples <- rstan::extract(rawSamples, permuted = FALSE)
 
-    yRange <- range(selectedTraces[[i]][, "mu1[1]"],
-                    selectedTraces[[i]][, "mu2[1]"])
+    df1 <- data.frame(indices = 1:samplePars$nSamplesPWU,
+                     y = theSamples[, 1, "theta"] )
+    p1 <- ggplot2::ggplot( df1,
+                           ggplot2::aes(x = df1$indices, y = df1$y),
+                           environment = environment() ) +
+      ggplot2::geom_line() +
+      ggplot2::xlab("Sample index") +
+      ggplot2::ylab("theta")
 
-    plot(1:nSamples, selectedTraces[[i]][, "mu1[1]"],
-         ylim=yRange, type="l", col="blue",
-         xlab="Sample number", ylab="Element [1] of mean vectors" )
-    lines(1:nSamples, selectedTraces[[i]][, "mu2[1]"], col="red")
+    df2 <- data.frame(indices = 1:samplePars$nSamplesPWU,
+                     y1 = theSamples[, 1, "mu1[1]"],
+                     y2 = theSamples[, 1, "mu2[1]"])
+    p2 <- ggplot2::ggplot( df2,
+                           ggplot2::aes(x = df2$indices),
+                           environment = environment() ) +
+      ggplot2::geom_line(ggplot2::aes(y = df2$y1, colour = "1")) +
+      ggplot2::geom_line(ggplot2::aes(y = df2$y2, colour = "2")) +
+      ggplot2::scale_color_manual("Pdf", values = c("1" = "blue", "2" = "red")) +
+      ggplot2::xlab("Sample index") +
+      ggplot2::ylab("Element [1] of mean vectors")
 
-    yRange <- range(selectedTraces[[i]][, "Sigma1[1,1]"],
-                    selectedTraces[[i]][, "Sigma2[1,1]"])
-    plot(1:nSamples, selectedTraces[[i]][, "Sigma1[1,1]"],
-         ylim=yRange, type="l", col="blue",
-         xlab="Sample number", ylab="Element [1,1] of variance matrices")
-    lines(1:nSamples, selectedTraces[[i]][, "Sigma2[1,1]"], col="red")
+    df3 <- data.frame(indices = 1:samplePars$nSamplesPWU,
+                      y1 = theSamples[, 1, "Sigma1[1,1]"],
+                      y2 = theSamples[, 1, "Sigma2[1,1]"])
+    p3 <- ggplot2::ggplot( df3,
+                           ggplot2::aes(x = df3$indices),
+                           environment = environment() ) +
+      ggplot2::geom_line(ggplot2::aes(y = df3$y1, colour = "1")) +
+      ggplot2::geom_line(ggplot2::aes(y = df3$y2, colour = "2")) +
+      ggplot2::scale_color_manual("Pdf", values = c("1" = "blue", "2" = "red")) +
+      ggplot2::xlab("Sample index") +
+      ggplot2::ylab("Element [1, 1] of variance matrices")
 
-    yRange <- range(selectedTraces[[i]][, "theta"])
-    plot(1:nSamples, selectedTraces[[i]][, "theta"],
-         ylim=yRange, type="l", col="blue",
-         xlab="Sample number", ylab="Proportions")
+    grid::grid.newpage()
+    grid::pushViewport(grid::viewport(layout=grid::grid.layout(3,1)))
+    print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
+    print(p2, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
+    print(p3, vp=grid::viewport(layout.pos.row=3, layout.pos.col=1))
 
-    title(main=paste("Chain", i), outer=TRUE, line=-2)
-
-    devAskNewPage( ask = options()$device.ask.default )
-
+    # devAskNewPage( ask = options()$device.ask.default )
   }
 }
 
-#' @title Plot autocorrelation functions
-#'
-#' @description Plot autocorrelation functions for selected traces
-#' from each chain.
-#'
-#' @param fmmSamples
-#' List containing samples of the posterior pdf and
-#' related information. This list is return by function
-#' \code{\link{sampleFmm}}; the documentation for function sampleFmm includes
-#' a complete description of container \code{fmmSamples}.
-#'
-#' @details
-#' Autocorrelation functions are plotted for the following model parameters:
-#' \itemize{
-#'  \item Element [1] of the mean vector for pdf 1 (mu1[1]).
-#'  \item Element [1,1] of the covariance matrix for pdf 1 (Sigma1[1,1]).
-#'  \item Model proportion associated with pdf 1 (theta)
-#' }
-#'
-#' @examples
-#' \dontrun{
-#' plotAcfs(fmmSamples)
-#' }
-#'
-#' @export
-plotAcfs <- function(fmmSamples) {
-
-  selectedTraces <- fmmSamples$stanSelectedTraces
-
-  N <- length(selectedTraces)
-
-  origPar <- par( mfrow=c(3,1))
-  on.exit(par(origPar), add=TRUE)
-
-  for(i in 1:N){
-    devAskNewPage( ask = TRUE )
-
-    acf(selectedTraces[[i]][, "mu1[1]"], main="mu1[1]")
-
-    acf(selectedTraces[[i]][, "Sigma1[1,1]"], main="Sigma1[1,1]")
-
-    acf(selectedTraces[[i]][, "theta"], main="theta")
-
-    title(main=paste("Chain", i), outer=TRUE, line=-1)
-
-    devAskNewPage( ask = options()$device.ask.default )
-
-  }
-}
+# #' @title Plot autocorrelation functions
+# #'
+# #' @description Plot autocorrelation functions for selected traces
+# #' from each chain.
+# #'
+# #' @param fmmSamples
+# #' List containing samples of the posterior pdf and
+# #' related information. This list is return by function
+# #' \code{\link{sampleFmm}}; the documentation for function sampleFmm includes
+# #' a complete description of container \code{fmmSamples}.
+# #'
+# #' @details
+# #' Autocorrelation functions are plotted for the following model parameters:
+# #' \itemize{
+# #'  \item Element [1] of the mean vector for pdf 1 (mu1[1]).
+# #'  \item Element [1,1] of the covariance matrix for pdf 1 (Sigma1[1,1]).
+# #'  \item Model proportion associated with pdf 1 (theta)
+# #' }
+# #'
+# #' @examples
+# #' \dontrun{
+# #' plotAcfs(fmmSamples)
+# #' }
+# #'
+# #' @export
+# plotAcfs <- function(fmmSamples) {
+#
+#   selectedTraces <- fmmSamples$stanSelectedTraces
+#
+#   N <- length(selectedTraces)
+#
+#   origPar <- par( mfrow=c(3,1))
+#   on.exit(par(origPar), add=TRUE)
+#
+#   for(i in 1:N){
+#     devAskNewPage( ask = TRUE )
+#
+#     acf(selectedTraces[[i]][, "mu1[1]"], main="mu1[1]")
+#
+#     acf(selectedTraces[[i]][, "Sigma1[1,1]"], main="Sigma1[1,1]")
+#
+#     acf(selectedTraces[[i]][, "theta"], main="theta")
+#
+#     title(main=paste("Chain", i), outer=TRUE, line=-1)
+#
+#     devAskNewPage( ask = options()$device.ask.default )
+#
+#   }
+# }
 
 #' @title Plot point statistics
 #'
@@ -1071,429 +1084,429 @@ combineChains <- function(fmmSamples, selectedChains) {
                g = g ) )
 }
 
-#' @title Check combined chains
-#'
-#' @description Check that the chains have been properly combined.
-#'
-#' @param combinedChains List in which each element contains the
-#' Monte Carlo samples of a parameter from the finite mixture model.
-#' This list is return by function \code{\link{combineChains}}; the
-#'                        documentation for function combineChains includes a
-#'                        complete description of container
-#'                        \code{combinedChains}.
-#'
-#' @details
-#' Histograms are shown for five model parameters:
-#' (1) The first element of the mean vector for pdf 1, which is
-#' designated "mu1[1]."
-#' (2) The first element of the mean vector for pdf 2, which is
-#' designated "mu2[1]."
-#' (3) The first element of the covariance matrix for pdf 1, which is
-#' designated "Sigma1[1,1]."
-#' (4) The first element of the covariance matrix for pdf 2, which is
-#' designated "Sigma2[1,1]."
-#' (5) The proportion in the finite mixture model associated with pdf 1,
-#' which is designated "theta."
-#'
-#' If the histograms show a bimodal distribution, then it is likely that
-#' the chains were improperly combined.
-#'
-#' @examples
-#' \dontrun{
-#' checkCombinedChains(combinedChains)
-#' }
-#'
-#' @export
-
-checkCombinedChains <- function(combinedChains) {
-
-  devAskNewPage( ask = TRUE )
-
-  origPar <- par(mfrow=c(1,2))
-  hist(combinedChains$mu1[,1], freq=FALSE,
-       col = "gray", border = "white",
-       xlab = "mu1[1]", main = "Pdf 1")
-  hist(combinedChains$mu2[,1], freq=FALSE,
-       col = "gray", border = "white",
-       xlab = "mu2[1]", main = "Pdf 2")
-  par(origPar)
-
-  origPar <- par(mfrow=c(1,2))
-  hist(combinedChains$Sigma1[,1,1], freq=FALSE,
-       col = "gray", border = "white",
-       xlab = "Sigma1[1,1]", main = "Pdf1")
-  hist(combinedChains$Sigma2[,1,1], freq=FALSE,
-       col = "gray", border = "white",
-       xlab = "Sigma2[1,1]", main = "Pdf 2")
-  par(origPar)
-
-  hist(combinedChains$theta, freq=FALSE,
-       col = "gray", border = "white",
-       xlab = "theta", main = "")
-
-  devAskNewPage( ask = options()$device.ask.default )
-
-}
-
-# chains a matrix of chains
-# each column is a separate chain.
+# #' @title Check combined chains
+# #'
+# #' @description Check that the chains have been properly combined.
+# #'
+# #' @param combinedChains List in which each element contains the
+# #' Monte Carlo samples of a parameter from the finite mixture model.
+# #' This list is return by function \code{\link{combineChains}}; the
+# #'                        documentation for function combineChains includes a
+# #'                        complete description of container
+# #'                        \code{combinedChains}.
+# #'
+# #' @details
+# #' Histograms are shown for five model parameters:
+# #' (1) The first element of the mean vector for pdf 1, which is
+# #' designated "mu1[1]."
+# #' (2) The first element of the mean vector for pdf 2, which is
+# #' designated "mu2[1]."
+# #' (3) The first element of the covariance matrix for pdf 1, which is
+# #' designated "Sigma1[1,1]."
+# #' (4) The first element of the covariance matrix for pdf 2, which is
+# #' designated "Sigma2[1,1]."
+# #' (5) The proportion in the finite mixture model associated with pdf 1,
+# #' which is designated "theta."
+# #'
+# #' If the histograms show a bimodal distribution, then it is likely that
+# #' the chains were improperly combined.
+# #'
+# #' @examples
+# #' \dontrun{
+# #' checkCombinedChains(combinedChains)
+# #' }
+# #'
+# #' @export
 #
-# the returned value is a list with two elements,
-# the potential scale reduction (rHat) and the number of
-# effective samples (nEff)
+# checkCombinedChains <- function(combinedChains) {
 #
-# At first glance it may seem that the calculation of these
-# two measures should be in separate functions. However,
-# the calculation of nEff requires intermediate results from
-# the calucation of rHat.
-CalcMeasures <- function ( chains ) {
-
-  ##
-  ## Estimate the potential scale reduction
-  ##
-
-  # The variables are documented on p. 284-285 of Gelman et al. (3rd ed.)
-  m <- ncol( chains )
-  n <- nrow( chains )
-  theColMeans <- colMeans( chains )         # psiBar,j
-  theGlobalMean <- mean( theColMeans )      # psiBar..
-
-  # between sequence variance
-  B <- n / ( m - 1 ) * sum( (theColMeans-theGlobalMean)^2 )
-
-  s2 <- vector( mode="numeric", length=m )
-  for( j in 1:m ) {
-    s2[j] <- var(chains[,j])
-  }
-
-  # within sequence variance
-  W <- mean( s2 )
-
-  # marginal posterior variance, eqn. 11.3
-  V <- ( n - 1 ) / n * W + 1 / n * B
-
-  # potential scale reduction, eqn. 11.4
-  rHat <- sqrt( V / W )
-
-  # edition 2 of Gelman et al., p. 298
-  # effective number of independent draws, eqn. 11.4
-  # nEff <- min( floor( m * n * V / B ), m * n )
-
-  ##
-  ## Estimate the effective sample size
-  ##
-
-  # See edition 3 of Gelman et al. p. 286-287
-
-  # unnumbered eqn just above eqn 11.7
-  Vt <- vector(mode = "numeric", length = n)
-  Vt[1] <- 0.0
-  for(t in 2:n) {
-    Vt[t] <- sum( colSums( diff(chains, lag = (t-1))^2 ) )  / (m*(n-(t-1)))
-  }
-
-  # eqn 11.7
-  rho_t <- 1 - Vt / ( 2 * V)
-
-  #   # This following method of calculating the mean correlation coefficient
-  #   # differs from that on page 286, but the results are almost identical.
-  #   a <- acf(chains, plot=FALSE)
-  #   nLags <- dim(a$acf)[1]
-  #   rho_t <- vector(mode="numeric", length=nLags)
-  #   for(i in 1:nLags) {
-  #     partialSum <- 0.0
-  #     for(j in 1:m) {
-  #       partialSum <- partialSum + a$acf[i,j,j]
-  #     }
-  #     rho_t[i] <- partialSum / m
-  #   }
-
-
-  # One stopping criterion is in Gelman et al., p. 286-287. It is defined by
-  # the condition:
-  #           if( rho_t[t] + rho_t[t+1] < 0.0 ) break
-  #
-  # Another, slightly different, stopping criterion is presented in the
-  # rstan manual in the subsection "Estimation of effective sample size",
-  # section number 54.4, in Stan Modeling Language - User's Guide and
-  # Reference Manual, Stan version 2.6.0. It is defined by
-  # the condition:
-  #           if( rho_t[t] < 0.0 ) break
-  #
-  # The index starts at 2, which corresponds to a lag of 1.
-  sum_rho_t <- 0.0
-  for(t in 2:n) {
-    # if( rho_t[t] + rho_t[t+1] < 0.0 ) break
-    if( rho_t[t] < 0.0 ) break
-    sum_rho_t <- sum_rho_t + rho_t[t]
-  }
-
-  # eqn. 11.8, p. 287
-  nEff <- as.integer( m * n / ( 1 + 2 * sum_rho_t ) )
-
-  return( c(rHat=rHat, nEff=nEff ) )
-}
-
-# split the chains are described by Gelman, p. 284
+#   devAskNewPage( ask = TRUE )
 #
-# combinedChains is a vector: the first "nSamplesPerChain" samples are
-# from the first chain, the second "nSamplesPerChain" samples are from the
-# second chain, and so on
-SplitChains <- function( combinedChains, nSamplesPerChain ) {
-  X <- matrix(combinedChains, nrow = nSamplesPerChain)
-
-  nNewRows <- as.integer( nSamplesPerChain / 2 )
-  a <- X[1:nNewRows, ]
-  b <- X[(1:nNewRows)+nNewRows, ]
-  return(cbind(a, b))
-}
-
-
-#' @title Calculate convergence measures of the Monte Carlo chains
-#'
-#' @description Calculate the potential scale reduction and the effective
-#' number of simulations draws for each model parameter in the finite
-#' mixture model.
-#'
-#' @param combinedChains     List in which each element contains the
-#' Monte Carlo samples of a parameter from the finite mixture model.
-#' This list is return by function \code{\link{combineChains}}; the
-#'                        documentation for function combineChains includes a
-#'                        complete description of container
-#'                        \code{combinedChains}.
-#' @param fmmSamples       List, which includes the Monte Carlo chains and
-#'                        other data, returned by function
-#'                        \code{\link{sampleFmm}}; the
-#'                        documentation for fmmSample includes a complete
-#'                        description of fmmSamples.
-#'
-#' @details
-#' ???
-#'
-#' @return A list containing these 7 elements.
-#' \tabular{lrr}{
-#' Element name \tab Role in finite mixture model \tab Structure of rHat and nEff \cr
-#' theta \tab Proportion associated with \tab scalar \cr
-#' mu1 \tab Mean vector for pdf 1 \tab vector of length N \cr
-#' mu2 \tab Mean vector for pdf 2 \tab vector of length N \cr
-#' tau1 \tab Vector of standard deviations for pdf 1 \tab vector of length N \cr
-#' tau2 \tab Vector of standard deviations for pdf 2 \tab vector of length N \cr
-#' Corr1 \tab Matrix of correlations for pdf 1 \tab Matrix of size NxN. \cr
-#' Corr2 \tab Matrix of correlations for pdf 2 \tab Matrix of size NxN.
-#' }
-#' Each of the seven elements comprise another
-#' list with two elements. The first element pertains to
-#' the potential scale reduction (rHat), and the second element pertains to the
-#' number of effective samples (nEff). The structures of these two elements
-#' are identical and depend
-#' on the variable to which they pertain. The dimension of the two pdfs
-#' in the finite mixture model is designated as N.
-#'
-#' Potential scale reduction and the number of effective samples are
-#' described by Gelman et al. (2014, p. 284-287).
-#'
-#' @references
-#' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B., Vehtari, A.,
-#' and Rubin, D.B., 2014, Bayesian data analysis (3rd ed.),
-#' CRC Press.
-#'
-#' @examples
-#' \dontrun{
-#' convergenceMeasures <- calcConvMeasures(combinedChains, fmmSamples)
-#' }
-#'
-#' @export
-calcConvMeasures <- function(combinedChains, fmmSamples) {
-
-  Internal1 <- function(x, N, nSamplesPerChain) {
-    rHat <- vector(mode = "numeric", length = N)
-    nEff <- vector(mode = "numeric", length = N)
-    for(i in 1:N) {
-      tmp <- CalcMeasures( SplitChains(x[, i], nSamplesPerChain) )
-      rHat[i] <- tmp["rHat"]
-      nEff[i] <- tmp["nEff"]
-    }
-    return(list(rHat = rHat, nEff = nEff))
-  }
-
-  Internal2 <- function(X, N, nSamplesPerChain) {
-    rHat <- matrix(NA_real_, nrow = N, ncol = N)
-    nEff <- matrix(NA_real_, nrow = N, ncol = N)
-    for(i in 1:(N-1)) {
-      for(j in (i+1):N) {
-        tmp <- CalcMeasures( SplitChains(X[, i, j], nSamplesPerChain) )
-        rHat[i,j] <- tmp["rHat"]
-        nEff[i,j] <- tmp["nEff"]
-        rHat[j,i] <- rHat[i,j]
-        nEff[j,i] <- nEff[i,j]
-      }
-    }
-    return(list(rHat = rHat, nEff = nEff))
-  }
-
-  Internal3 <- function(X) {
-    Y <- array( NA_real_, dim = dim(X) )
-    nSamples <- dim(X)[1]
-    for(i in 1:nSamples) {
-      Y[i, , ] <- cov2cor(X[i, ,])
-    }
-    return(Y)
-  }
-
-  Internal4 <- function(X) {
-    tmp <- dim(X)
-    Y <- matrix(NA_real_, nrow = tmp[1], ncol = tmp[2])
-    for(i in 1:tmp[2]) {
-      Y[, i] <- sqrt(X[, i, i])
-    }
-    return(Y)
-  }
-
-  nSamplesPerChain <- fmmSamples$samplingParams$nSamplesPerChain
-  N <- ncol(combinedChains$mu1)  # N is also the number of principal components
-
-  measures <- vector(mode = "list")
-
-  tmp <- CalcMeasures( SplitChains(combinedChains$theta, nSamplesPerChain) )
-  measures$theta <- list(rHat = unname(tmp["rHat"]), nEff = unname(tmp["nEff"]))
-
-  measures$mu1 <- Internal1(combinedChains$mu1, N, nSamplesPerChain)
-  measures$mu2 <- Internal1(combinedChains$mu2, N, nSamplesPerChain)
-
-  measures$tau1 <- Internal1(Internal4(combinedChains$Sigma1), N, nSamplesPerChain)
-  measures$tau2 <- Internal1(Internal4(combinedChains$Sigma2), N, nSamplesPerChain)
-  measures$Corr1 <- Internal2(Internal3(combinedChains$Sigma1), N, nSamplesPerChain)
-  measures$Corr2 <- Internal2(Internal3(combinedChains$Sigma2), N, nSamplesPerChain)
-
-  return( measures )
-
-}
-
-#' @title Plot convergence measures
-#'
-#' @description Plot the potential scale reduction and the number of
-#' effective samples for each parameter in the finite mixture model.
-#'
-#' @param convMeasures List containing the potential scale reductions and
-#' numbers of effective samples for every model parameter. This list is
-#' returned by function \code{\link{calcConvMeasures}}; the documentation
-#' for function calcConvMeasures includes a complete description of
-#' container \code{convMeasures}.
-#'
-#' @param combinedChains List in which each element contains the
-#' Monte Carlo samples of a parameter from the finite mixture model.
-#' This list is return by function \code{\link{combineChains}}; the
-#'                        documentation for function combineChains includes a
-#'                        complete description of container
-#'                        \code{combinedChains}.
-#'
-#' @details
-#' The potential scale reductions and
-#' numbers of effective samples are displayed as bar charts and matrices,
-#' depending upon the structure of the associated model parameters.
-#'
-#' When a bar chart shows potential scale reductions, there are two, horizontal
-#' green lines, which approximately delimit an optimal range. When a bar chart
-#' shows numbers of effective samples, there is one, horizontal line, which
-#' is the maximum (optimal) number of effective samples.
-#'
-#' @examples
-#' \dontrun{
-#' plotConvMeasures(convMeasures, combinedChains)
-#' }
-#'
-#' @export
-plotConvMeasures <- function(convMeasures, combinedChains) {
-
-  # For vectors
-  InternalPlot1 <- function(rHat, nEff, nSamples, paramName) {
-
-    df <- data.frame( component = 1:length(rHat),
-                      rHat = rHat,
-                      nEff = nEff )
-    a <- ggplot2::ggplot( df,
-                          ggplot2::aes(x = component, y = rHat),
-                          environment = environment()) +
-      ggplot2::geom_bar(stat = "identity") +
-      ggplot2::geom_hline(ggplot2::aes(yintercept = 0.99), col="green") +
-      ggplot2::geom_hline(ggplot2::aes(yintercept = 1.05), col="green") +
-      ggplot2::xlab("Component") +
-      ggplot2::ylab("Potential scale reduction (no units)") +
-      ggplot2::ggtitle(paramName)
-
-    b <- ggplot2::ggplot( df,
-                          ggplot2::aes(x = component, y = nEff),
-                          environment = environment()) +
-      ggplot2::geom_bar(stat = "identity") +
-      ggplot2::geom_hline(ggplot2::aes(yintercept = nSamples), col="green") +
-      ggplot2::xlab("Component") +
-      ggplot2::ylab("Number of effective samples (no units)")+
-      ggplot2::ggtitle(paramName)
-
-    grid::grid.newpage()
-    grid::pushViewport(grid::viewport(layout=grid::grid.layout(2,1)))
-    print(a, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
-    print(b, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
-
-  }
-
-  # for matrices
-  InternalPlot2 <- function(rHat, nEff, nSamples, paramName){
-
-    Z1 <- reshape2::melt(rHat)
-    Z1 <- na.omit(Z1)
-    p1 <- ggplot2::ggplot(Z1,
-                          ggplot2::aes(Var2, Var1),
-                          environment = environment())+
-      ggplot2::geom_tile(data=Z1, ggplot2::aes(fill=value), color="white")+
-      ggplot2::scale_fill_gradient2(low="blue", high="red", mid="white",
-                                    midpoint=1,
-                                    name="Potential\nscale\nreduction\n(no units)")+
-      ggplot2::xlab("Component") +
-      ggplot2::ylab("Component") +
-      ggplot2::coord_equal() +
-      ggplot2::ggtitle(paramName)
-
-    Z2 <- reshape2::melt(nEff)
-    Z2 <- na.omit(Z2)
-
-    p2 <- ggplot2::ggplot(Z2,
-                          ggplot2::aes(Var2, Var1),
-                          environment = environment())+
-      ggplot2::geom_tile(data=Z2, ggplot2::aes(fill=value), color="white")+
-      ggplot2::scale_fill_gradient(limit=c(min(Z2$value),nSamples),
-                                   high = "#132B43", low = "#56B1F7",
-                                   name="Number\nof effective\nsamples\n(no units)")+
-      ggplot2::xlab("Component") +
-      ggplot2::ylab("Component") +
-      ggplot2::coord_equal()
-
-    grid::grid.newpage()
-    grid::pushViewport(grid::viewport(layout=grid::grid.layout(1,2)))
-    print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
-    print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
-
-  }
-
-
-  nSamples <- length(combinedChains$theta)
-
-  devAskNewPage( ask = TRUE )
-
-  InternalPlot1(convMeasures$theta$rHat, convMeasures$theta$nEff, nSamples, "theta")
-  InternalPlot1(convMeasures$mu1$rHat, convMeasures$mu1$nEff, nSamples, "mu1")
-  InternalPlot1(convMeasures$mu2$rHat, convMeasures$mu2$nEff, nSamples, "mu2")
-  InternalPlot1(convMeasures$tau1$rHat, convMeasures$tau1$nEff, nSamples, "tau1")
-  InternalPlot1(convMeasures$tau2$rHat, convMeasures$tau2$nEff, nSamples, "tau2")
-
-  InternalPlot2(convMeasures$Corr1$rHat, convMeasures$Corr1$nEff, nSamples,
-                "Correlation matrix 1")
-  InternalPlot2(convMeasures$Corr2$rHat, convMeasures$Corr2$nEff, nSamples,
-                "Correlation matrix 2")
-
-  devAskNewPage( ask = options()$device.ask.default )
-
-}
+#   origPar <- par(mfrow=c(1,2))
+#   hist(combinedChains$mu1[,1], freq=FALSE,
+#        col = "gray", border = "white",
+#        xlab = "mu1[1]", main = "Pdf 1")
+#   hist(combinedChains$mu2[,1], freq=FALSE,
+#        col = "gray", border = "white",
+#        xlab = "mu2[1]", main = "Pdf 2")
+#   par(origPar)
+#
+#   origPar <- par(mfrow=c(1,2))
+#   hist(combinedChains$Sigma1[,1,1], freq=FALSE,
+#        col = "gray", border = "white",
+#        xlab = "Sigma1[1,1]", main = "Pdf1")
+#   hist(combinedChains$Sigma2[,1,1], freq=FALSE,
+#        col = "gray", border = "white",
+#        xlab = "Sigma2[1,1]", main = "Pdf 2")
+#   par(origPar)
+#
+#   hist(combinedChains$theta, freq=FALSE,
+#        col = "gray", border = "white",
+#        xlab = "theta", main = "")
+#
+#   devAskNewPage( ask = options()$device.ask.default )
+#
+# }
+#
+# # chains a matrix of chains
+# # each column is a separate chain.
+# #
+# # the returned value is a list with two elements,
+# # the potential scale reduction (rHat) and the number of
+# # effective samples (nEff)
+# #
+# # At first glance it may seem that the calculation of these
+# # two measures should be in separate functions. However,
+# # the calculation of nEff requires intermediate results from
+# # the calucation of rHat.
+# CalcMeasures <- function ( chains ) {
+#
+#   ##
+#   ## Estimate the potential scale reduction
+#   ##
+#
+#   # The variables are documented on p. 284-285 of Gelman et al. (3rd ed.)
+#   m <- ncol( chains )
+#   n <- nrow( chains )
+#   theColMeans <- colMeans( chains )         # psiBar,j
+#   theGlobalMean <- mean( theColMeans )      # psiBar..
+#
+#   # between sequence variance
+#   B <- n / ( m - 1 ) * sum( (theColMeans-theGlobalMean)^2 )
+#
+#   s2 <- vector( mode="numeric", length=m )
+#   for( j in 1:m ) {
+#     s2[j] <- var(chains[,j])
+#   }
+#
+#   # within sequence variance
+#   W <- mean( s2 )
+#
+#   # marginal posterior variance, eqn. 11.3
+#   V <- ( n - 1 ) / n * W + 1 / n * B
+#
+#   # potential scale reduction, eqn. 11.4
+#   rHat <- sqrt( V / W )
+#
+#   # edition 2 of Gelman et al., p. 298
+#   # effective number of independent draws, eqn. 11.4
+#   # nEff <- min( floor( m * n * V / B ), m * n )
+#
+#   ##
+#   ## Estimate the effective sample size
+#   ##
+#
+#   # See edition 3 of Gelman et al. p. 286-287
+#
+#   # unnumbered eqn just above eqn 11.7
+#   Vt <- vector(mode = "numeric", length = n)
+#   Vt[1] <- 0.0
+#   for(t in 2:n) {
+#     Vt[t] <- sum( colSums( diff(chains, lag = (t-1))^2 ) )  / (m*(n-(t-1)))
+#   }
+#
+#   # eqn 11.7
+#   rho_t <- 1 - Vt / ( 2 * V)
+#
+#   #   # This following method of calculating the mean correlation coefficient
+#   #   # differs from that on page 286, but the results are almost identical.
+#   #   a <- acf(chains, plot=FALSE)
+#   #   nLags <- dim(a$acf)[1]
+#   #   rho_t <- vector(mode="numeric", length=nLags)
+#   #   for(i in 1:nLags) {
+#   #     partialSum <- 0.0
+#   #     for(j in 1:m) {
+#   #       partialSum <- partialSum + a$acf[i,j,j]
+#   #     }
+#   #     rho_t[i] <- partialSum / m
+#   #   }
+#
+#
+#   # One stopping criterion is in Gelman et al., p. 286-287. It is defined by
+#   # the condition:
+#   #           if( rho_t[t] + rho_t[t+1] < 0.0 ) break
+#   #
+#   # Another, slightly different, stopping criterion is presented in the
+#   # rstan manual in the subsection "Estimation of effective sample size",
+#   # section number 54.4, in Stan Modeling Language - User's Guide and
+#   # Reference Manual, Stan version 2.6.0. It is defined by
+#   # the condition:
+#   #           if( rho_t[t] < 0.0 ) break
+#   #
+#   # The index starts at 2, which corresponds to a lag of 1.
+#   sum_rho_t <- 0.0
+#   for(t in 2:n) {
+#     # if( rho_t[t] + rho_t[t+1] < 0.0 ) break
+#     if( rho_t[t] < 0.0 ) break
+#     sum_rho_t <- sum_rho_t + rho_t[t]
+#   }
+#
+#   # eqn. 11.8, p. 287
+#   nEff <- as.integer( m * n / ( 1 + 2 * sum_rho_t ) )
+#
+#   return( c(rHat=rHat, nEff=nEff ) )
+# }
+#
+# # split the chains are described by Gelman, p. 284
+# #
+# # combinedChains is a vector: the first "nSamplesPerChain" samples are
+# # from the first chain, the second "nSamplesPerChain" samples are from the
+# # second chain, and so on
+# SplitChains <- function( combinedChains, nSamplesPerChain ) {
+#   X <- matrix(combinedChains, nrow = nSamplesPerChain)
+#
+#   nNewRows <- as.integer( nSamplesPerChain / 2 )
+#   a <- X[1:nNewRows, ]
+#   b <- X[(1:nNewRows)+nNewRows, ]
+#   return(cbind(a, b))
+# }
+#
+#
+# #' @title Calculate convergence measures of the Monte Carlo chains
+# #'
+# #' @description Calculate the potential scale reduction and the effective
+# #' number of simulations draws for each model parameter in the finite
+# #' mixture model.
+# #'
+# #' @param combinedChains     List in which each element contains the
+# #' Monte Carlo samples of a parameter from the finite mixture model.
+# #' This list is return by function \code{\link{combineChains}}; the
+# #'                        documentation for function combineChains includes a
+# #'                        complete description of container
+# #'                        \code{combinedChains}.
+# #' @param fmmSamples       List, which includes the Monte Carlo chains and
+# #'                        other data, returned by function
+# #'                        \code{\link{sampleFmm}}; the
+# #'                        documentation for fmmSample includes a complete
+# #'                        description of fmmSamples.
+# #'
+# #' @details
+# #' ???
+# #'
+# #' @return A list containing these 7 elements.
+# #' \tabular{lrr}{
+# #' Element name \tab Role in finite mixture model \tab Structure of rHat and nEff \cr
+# #' theta \tab Proportion associated with \tab scalar \cr
+# #' mu1 \tab Mean vector for pdf 1 \tab vector of length N \cr
+# #' mu2 \tab Mean vector for pdf 2 \tab vector of length N \cr
+# #' tau1 \tab Vector of standard deviations for pdf 1 \tab vector of length N \cr
+# #' tau2 \tab Vector of standard deviations for pdf 2 \tab vector of length N \cr
+# #' Corr1 \tab Matrix of correlations for pdf 1 \tab Matrix of size NxN. \cr
+# #' Corr2 \tab Matrix of correlations for pdf 2 \tab Matrix of size NxN.
+# #' }
+# #' Each of the seven elements comprise another
+# #' list with two elements. The first element pertains to
+# #' the potential scale reduction (rHat), and the second element pertains to the
+# #' number of effective samples (nEff). The structures of these two elements
+# #' are identical and depend
+# #' on the variable to which they pertain. The dimension of the two pdfs
+# #' in the finite mixture model is designated as N.
+# #'
+# #' Potential scale reduction and the number of effective samples are
+# #' described by Gelman et al. (2014, p. 284-287).
+# #'
+# #' @references
+# #' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B., Vehtari, A.,
+# #' and Rubin, D.B., 2014, Bayesian data analysis (3rd ed.),
+# #' CRC Press.
+# #'
+# #' @examples
+# #' \dontrun{
+# #' convergenceMeasures <- calcConvMeasures(combinedChains, fmmSamples)
+# #' }
+# #'
+# #' @export
+# calcConvMeasures <- function(combinedChains, fmmSamples) {
+#
+#   Internal1 <- function(x, N, nSamplesPerChain) {
+#     rHat <- vector(mode = "numeric", length = N)
+#     nEff <- vector(mode = "numeric", length = N)
+#     for(i in 1:N) {
+#       tmp <- CalcMeasures( SplitChains(x[, i], nSamplesPerChain) )
+#       rHat[i] <- tmp["rHat"]
+#       nEff[i] <- tmp["nEff"]
+#     }
+#     return(list(rHat = rHat, nEff = nEff))
+#   }
+#
+#   Internal2 <- function(X, N, nSamplesPerChain) {
+#     rHat <- matrix(NA_real_, nrow = N, ncol = N)
+#     nEff <- matrix(NA_real_, nrow = N, ncol = N)
+#     for(i in 1:(N-1)) {
+#       for(j in (i+1):N) {
+#         tmp <- CalcMeasures( SplitChains(X[, i, j], nSamplesPerChain) )
+#         rHat[i,j] <- tmp["rHat"]
+#         nEff[i,j] <- tmp["nEff"]
+#         rHat[j,i] <- rHat[i,j]
+#         nEff[j,i] <- nEff[i,j]
+#       }
+#     }
+#     return(list(rHat = rHat, nEff = nEff))
+#   }
+#
+#   Internal3 <- function(X) {
+#     Y <- array( NA_real_, dim = dim(X) )
+#     nSamples <- dim(X)[1]
+#     for(i in 1:nSamples) {
+#       Y[i, , ] <- cov2cor(X[i, ,])
+#     }
+#     return(Y)
+#   }
+#
+#   Internal4 <- function(X) {
+#     tmp <- dim(X)
+#     Y <- matrix(NA_real_, nrow = tmp[1], ncol = tmp[2])
+#     for(i in 1:tmp[2]) {
+#       Y[, i] <- sqrt(X[, i, i])
+#     }
+#     return(Y)
+#   }
+#
+#   nSamplesPerChain <- fmmSamples$samplingParams$nSamplesPerChain
+#   N <- ncol(combinedChains$mu1)  # N is also the number of principal components
+#
+#   measures <- vector(mode = "list")
+#
+#   tmp <- CalcMeasures( SplitChains(combinedChains$theta, nSamplesPerChain) )
+#   measures$theta <- list(rHat = unname(tmp["rHat"]), nEff = unname(tmp["nEff"]))
+#
+#   measures$mu1 <- Internal1(combinedChains$mu1, N, nSamplesPerChain)
+#   measures$mu2 <- Internal1(combinedChains$mu2, N, nSamplesPerChain)
+#
+#   measures$tau1 <- Internal1(Internal4(combinedChains$Sigma1), N, nSamplesPerChain)
+#   measures$tau2 <- Internal1(Internal4(combinedChains$Sigma2), N, nSamplesPerChain)
+#   measures$Corr1 <- Internal2(Internal3(combinedChains$Sigma1), N, nSamplesPerChain)
+#   measures$Corr2 <- Internal2(Internal3(combinedChains$Sigma2), N, nSamplesPerChain)
+#
+#   return( measures )
+#
+# }
+#
+# #' @title Plot convergence measures
+# #'
+# #' @description Plot the potential scale reduction and the number of
+# #' effective samples for each parameter in the finite mixture model.
+# #'
+# #' @param convMeasures List containing the potential scale reductions and
+# #' numbers of effective samples for every model parameter. This list is
+# #' returned by function \code{\link{calcConvMeasures}}; the documentation
+# #' for function calcConvMeasures includes a complete description of
+# #' container \code{convMeasures}.
+# #'
+# #' @param combinedChains List in which each element contains the
+# #' Monte Carlo samples of a parameter from the finite mixture model.
+# #' This list is return by function \code{\link{combineChains}}; the
+# #'                        documentation for function combineChains includes a
+# #'                        complete description of container
+# #'                        \code{combinedChains}.
+# #'
+# #' @details
+# #' The potential scale reductions and
+# #' numbers of effective samples are displayed as bar charts and matrices,
+# #' depending upon the structure of the associated model parameters.
+# #'
+# #' When a bar chart shows potential scale reductions, there are two, horizontal
+# #' green lines, which approximately delimit an optimal range. When a bar chart
+# #' shows numbers of effective samples, there is one, horizontal line, which
+# #' is the maximum (optimal) number of effective samples.
+# #'
+# #' @examples
+# #' \dontrun{
+# #' plotConvMeasures(convMeasures, combinedChains)
+# #' }
+# #'
+# #' @export
+# plotConvMeasures <- function(convMeasures, combinedChains) {
+#
+#   # For vectors
+#   InternalPlot1 <- function(rHat, nEff, nSamples, paramName) {
+#
+#     df <- data.frame( component = 1:length(rHat),
+#                       rHat = rHat,
+#                       nEff = nEff )
+#     a <- ggplot2::ggplot( df,
+#                           ggplot2::aes(x = component, y = rHat),
+#                           environment = environment()) +
+#       ggplot2::geom_bar(stat = "identity") +
+#       ggplot2::geom_hline(ggplot2::aes(yintercept = 0.99), col="green") +
+#       ggplot2::geom_hline(ggplot2::aes(yintercept = 1.05), col="green") +
+#       ggplot2::xlab("Component") +
+#       ggplot2::ylab("Potential scale reduction (no units)") +
+#       ggplot2::ggtitle(paramName)
+#
+#     b <- ggplot2::ggplot( df,
+#                           ggplot2::aes(x = component, y = nEff),
+#                           environment = environment()) +
+#       ggplot2::geom_bar(stat = "identity") +
+#       ggplot2::geom_hline(ggplot2::aes(yintercept = nSamples), col="green") +
+#       ggplot2::xlab("Component") +
+#       ggplot2::ylab("Number of effective samples (no units)")+
+#       ggplot2::ggtitle(paramName)
+#
+#     grid::grid.newpage()
+#     grid::pushViewport(grid::viewport(layout=grid::grid.layout(2,1)))
+#     print(a, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
+#     print(b, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
+#
+#   }
+#
+#   # for matrices
+#   InternalPlot2 <- function(rHat, nEff, nSamples, paramName){
+#
+#     Z1 <- reshape2::melt(rHat)
+#     Z1 <- na.omit(Z1)
+#     p1 <- ggplot2::ggplot(Z1,
+#                           ggplot2::aes(Var2, Var1),
+#                           environment = environment())+
+#       ggplot2::geom_tile(data=Z1, ggplot2::aes(fill=value), color="white")+
+#       ggplot2::scale_fill_gradient2(low="blue", high="red", mid="white",
+#                                     midpoint=1,
+#                                     name="Potential\nscale\nreduction\n(no units)")+
+#       ggplot2::xlab("Component") +
+#       ggplot2::ylab("Component") +
+#       ggplot2::coord_equal() +
+#       ggplot2::ggtitle(paramName)
+#
+#     Z2 <- reshape2::melt(nEff)
+#     Z2 <- na.omit(Z2)
+#
+#     p2 <- ggplot2::ggplot(Z2,
+#                           ggplot2::aes(Var2, Var1),
+#                           environment = environment())+
+#       ggplot2::geom_tile(data=Z2, ggplot2::aes(fill=value), color="white")+
+#       ggplot2::scale_fill_gradient(limit=c(min(Z2$value),nSamples),
+#                                    high = "#132B43", low = "#56B1F7",
+#                                    name="Number\nof effective\nsamples\n(no units)")+
+#       ggplot2::xlab("Component") +
+#       ggplot2::ylab("Component") +
+#       ggplot2::coord_equal()
+#
+#     grid::grid.newpage()
+#     grid::pushViewport(grid::viewport(layout=grid::grid.layout(1,2)))
+#     print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
+#     print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
+#
+#   }
+#
+#
+#   nSamples <- length(combinedChains$theta)
+#
+#   devAskNewPage( ask = TRUE )
+#
+#   InternalPlot1(convMeasures$theta$rHat, convMeasures$theta$nEff, nSamples, "theta")
+#   InternalPlot1(convMeasures$mu1$rHat, convMeasures$mu1$nEff, nSamples, "mu1")
+#   InternalPlot1(convMeasures$mu2$rHat, convMeasures$mu2$nEff, nSamples, "mu2")
+#   InternalPlot1(convMeasures$tau1$rHat, convMeasures$tau1$nEff, nSamples, "tau1")
+#   InternalPlot1(convMeasures$tau2$rHat, convMeasures$tau2$nEff, nSamples, "tau2")
+#
+#   InternalPlot2(convMeasures$Corr1$rHat, convMeasures$Corr1$nEff, nSamples,
+#                 "Correlation matrix 1")
+#   InternalPlot2(convMeasures$Corr2$rHat, convMeasures$Corr2$nEff, nSamples,
+#                 "Correlation matrix 2")
+#
+#   devAskNewPage( ask = options()$device.ask.default )
+#
+# }
 
 #' @title Calculate test quantities for model checking
 #'
