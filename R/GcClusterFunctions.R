@@ -154,9 +154,8 @@ transformGcData <- function(gcData, alpha = 0.98) {
 #'
 #' @param transData     List containing the transformed geochemical
 #' concentrations and related information.
-#' This list is return by function \code{\link{transformGcData}}; the
-#' documentation for function transformGcData includes a complete
-#' description of container \code{transData}.
+#' This list is return by function \code{\link{transformGcData}}, for which the
+#' documentation includes a complete description of container \code{transData}.
 #' @param relOffset  Scalar specifying the relative distance that each
 #' percentage of cummulative variance (see Details) is offset from the top
 #' of its respective bar.
@@ -179,12 +178,11 @@ transformGcData <- function(gcData, alpha = 0.98) {
 #'
 #' @examples
 #' \dontrun{
-#' plotVariances(transData)
+#' plotEdaVar(transData)
 #' }
 #'
-
 #' @export
-plotVariances <- function(transData, relOffset = 0.04, size = 3) {
+plotEdaVar <- function(transData, relOffset = 0.04, size = 3) {
 
   variances <- transData$robustEigenvalues
   tmp <- 100 * cumsum( variances ) / sum( variances )
@@ -208,8 +206,110 @@ plotVariances <- function(transData, relOffset = 0.04, size = 3) {
     ggplot2::ylab("Variance")
 
   print(p)
+
 }
 
+#' @title Plot the principal component distributions
+#'
+#' @description Plot the distributions of the principal components as
+#' boxplots and violin plots. At the top of the violin plots, print
+#' the calculated standard deviations of principal components.
+#'
+#' @param transData     List containing the transformed geochemical
+#' concentrations and related information.
+#' This list is return by function \code{\link{transformGcData}}, for which the
+#' documentation includes a complete description of container \code{transData}.
+#' @param relOffset  Scalar specifying the relative distance that the
+#' standard deviations are are offset from the top of the highest violin figure.
+#' @param size  Scalar specifying the text size for the standard deviations.
+#'
+#' @examples
+#' \dontrun{
+#' plotEdaDist(transData)
+#' }
+#'
+#' @export
+plotEdaDist <- function(transData, relOffset = 0.04, size = 3) {
+
+  robustPCs <- transData$robustPCs
+  colnames(robustPCs) <- 1:ncol(robustPCs)
+
+  df <- reshape2::melt(robustPCs)[,-1]   # the first col contains the row numbers
+  colnames(df) <- c("Component", "Value")
+
+  df.sd <- data.frame(Component = colnames(robustPCs),
+                      sd = round( apply(robustPCs, 2, sd), digits = 2) )
+
+  p1 <- ggplot2::ggplot( df,
+                         ggplot2::aes(x = factor(Component), y = Value),
+                         environment = environment() ) +
+    ggplot2::geom_boxplot() +
+    ggplot2::xlab("Principal component")
+
+  p2 <- ggplot2::ggplot( df,
+                         ggplot2::aes(x = factor(Component), y = Value),
+                         environment = environment() ) +
+    ggplot2::geom_violin(scale = "width", fill = "grey50") +
+    ggplot2::xlab("Principal component") +
+    ggplot2::geom_text(ggplot2::aes(x = factor(Component),
+                                    y = max(df$Value) * (1 + relOffset),
+                                    label = sd), data = df.sd,
+                       size = size, vjust = 0, hjust = 1, angle = 90 )
+
+
+
+  grid::grid.newpage()
+  grid::pushViewport(grid::viewport(layout=grid::grid.layout(1,2)))
+  print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
+  print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
+
+}
+
+#' @title Plot the correlations among the principal components
+#'
+#' @description Plot the correlation matrix of the principal components and
+#' the plot a histogram of the correlations.
+#'
+#' @param transData     List containing the transformed geochemical
+#' concentrations and related information.
+#' This list is return by function \code{\link{transformGcData}}, for which the
+#' documentation includes a complete description of container \code{transData}.
+#'
+#' @examples
+#' \dontrun{
+#' plotEdaCorr(transData)
+#' }
+#'
+#' @export
+plotEdaCorr <- function(transData) {
+
+  corMatrix <- cor(transData$robustPCs)
+
+  p1 <- ggplot2::ggplot(reshape2::melt(corMatrix),
+                        ggplot2::aes(Var2, Var1),
+                        environment = environment())+
+    ggplot2::geom_tile(ggplot2::aes(fill=value), color="white")+
+    ggplot2::scale_fill_gradient2(low="blue", high="red", mid="white",
+                                  midpoint=0, limit=c(-1,1),
+                                  name="Correlation\n(Pearson)")+
+    ggplot2::xlab("Component") +
+    ggplot2::ylab("Component") +
+    ggplot2::coord_equal()
+
+  df <- data.frame(x = corMatrix[lower.tri(corMatrix)])
+  p2 <- ggplot2::ggplot( df,
+                         ggplot2::aes(x = x),
+                         environment = environment()) +
+    ggplot2::geom_histogram() +
+    ggplot2::xlab("Correlation (Pearson)") +
+    ggplot2::ylab("Count")
+
+  grid::grid.newpage()
+  grid::pushViewport(grid::viewport(layout=grid::grid.layout(1,2)))
+  print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
+  print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
+
+}
 
 
 #' @title Optimize the posterior pdf using package mclust
@@ -370,20 +470,19 @@ optFmm_mclust <- function(transData, nPCS, nCpuCores = 4, nSoln = NULL) {
 #'
 #' @param transData     List containing the transformed geochemical
 #' concentrations and related information.
-#' This list is return by function \code{\link{transformGcData}}; the
-#' documentation for function transformGcData includes a complete
-#' description of container \code{transData}.
+#' This list is return by function \code{\link{transformGcData}}, for which the
+#' documentation includes a complete description of container \code{transData}.
+#'
 #' @param nPCS          Number of principal components that are used in the
 #'                      finite mixture model (See Details).
+#'
 #' @param tauBounds     Vector of length 2, containing the lower and upper
 #'                      bounds for tau (See Details).
 #'
 #' @details
 #' The parameters in the finite mixture model are estimated
-#' from the robust principal components, which are
-#' calculated with function gcTransform and stored as a matrix within
-#' \code{transData}. All matrix elements must contain values;
-#' that is, missing values are not allowed.
+#' from the robust principal components, which are stored as a matrix within
+#' \code{transData}.
 #'
 #' The number of principal components, \code{nPCS}, means that
 #' principal components 1, 2, ..., nPCs are used in the finite mixture model.
@@ -397,6 +496,11 @@ optFmm_mclust <- function(transData, nPCS, nCpuCores = 4, nSoln = NULL) {
 #' Unlike function optFmm_mclust, only one solution is calculated with
 #' function optFmm_rstan.
 #'
+#' The optimzation may fail to converge to a mode of the posterior pdf because
+#' the likelihood function approaches infinity near the boundaries
+#' (Marin et al., 2005).
+#' Consequently, checking the results of the optimization is important.
+
 #' The finite mixture model, which has two pdfs, involves five parameters:
 #' \describe{
 #'  \item{theta}{Proportion of population associated with pdf 1.}
@@ -415,10 +519,19 @@ optFmm_mclust <- function(transData, nPCS, nCpuCores = 4, nSoln = NULL) {
 #' @return A list that is returned from function optimizing within the
 #' rstan package. If the optimization successfully locates a mode in
 #' the posterior pdf, then the list has two elements:
-#' @return \item{par}{List comprising the point estimates for all
-#' model parameters and the two additional variables associated with the model.
-#' Although there are many model parameters, only five are important and
-#' are described in Details; the others may be safely ignored.}
+#' @return \item{par}{List comprising the point estimates for
+#' the following model parameters:
+#' \describe{
+#'  \item{theta}{Proportion of population associated with pdf 1.}
+#'  \item{mu1}{Mean vector for pdf 1.}
+#'  \item{mu2}{Mean vector for pdf 2.}
+#'  \item{tau1}{Standard deviation vector for pdf 1.}
+#'  \item{tau2}{Standard deviation vector for pdf 2.}
+#'  \item{L_Omega1}{Lower triangle of the correlation matrix for pdf 1.}
+#'  \item{L_Omega2}{Lower triangle of the correlation matrix for pdf 2.}
+#'  \item{log_lik}{The logarithm of the likelihood function.}
+#' }
+#' }
 #' @return \item{value}{The logarithm of the posterior pdf at the mode. Note
 #' that this variable is not the logarithm of the likelihood function.}
 #'
@@ -433,8 +546,7 @@ optFmm_mclust <- function(transData, nPCS, nCpuCores = 4, nSoln = NULL) {
 #'
 #' @examples
 #' \dontrun{
-#' fmmMode_rstan <- optFmm_rstan(transData$robustPCs, nPCS,
-#'                               tauBounds = c(0.001,20))
+#' fmmMode_rstan <- optFmm_rstan(transData, nPCS, tauBounds = c(0.001,20))
 #' }
 #'
 #' @export
@@ -457,31 +569,29 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 
 #' @title Sample the posterior pdf
 #'
-#' @description Sample the posterior probability density function of the
+#' @description Sample the posterior probability density function for the
 #' finite mixture model. The model implementation and the sampling are
 #' performed with package rstan.
 #'
 #' @param transData     List containing the transformed geochemical
 #' concentrations and related information.
-#' This list is return by function \code{\link{transformGcData}}; the
-#' documentation for function transformGcData includes a complete
-#' description of container \code{transData}.
+#' This list is return by function \code{\link{transformGcData}}, for which the
+#' documentation includes a complete description of container \code{transData}.
 #' @param nPCS          Number of principal components that are used in the
 #'                      finite mixture model (See Details).
 #' @param tauBounds     Vector of length 2, containing the lower and upper
 #'                      bounds for tau (See Details).
-#' @param nCpuCores      Number of central processing units (cpu's) that are
-#'                      used
-#'                      for parallel computations (See Details).
-#' @param nChainsPerCore Number of chains that each cpu core calculates
+#' @param nSamplesPerChain  Number of samples in each chain (See details).
+#' @param nCpuCores     Number of central processing units (cpu's) that are
+#'                      used for one set of parallel computations (See Details).
+#' @param nRepetitions  Number of repetitions of parallel computations (See Details).
+#' @param procDir      Directory into which the results are written
 #'                      (See Details).
 #'
 #' @details
 #' The parameters in the finite mixture model are estimated
-#' from the robust principal components, which are
-#' calculated with function gcTransform and stored as a matrix within
-#' \code{transData}. All matrix elements must contain values;
-#' that is, missing values are not allowed.
+#' from the robust principal components, which are stored as a matrix within
+#' \code{transData}.
 #'
 #' The number of principal components, \code{nPCS}, means that
 #' principal components 1, 2, ..., nPCs are used in the finite mixture model.
@@ -493,52 +603,46 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 #' tauBounds[1] and tauBounds[2], respectively.
 #'
 #' The posterior probability density function (pdf) is sampled to yield a chain.
-#' The sampling for each chain is performed in parallel on multiple central
+#' The number of samples per chain \code{nSamplesPerChain} equals the
+#' number of warm-up samples plus the number of post warm-up samples. Both
+#' groups have equal size.
+#'
+#' The sampling is performed in parallel on multiple central
 #' processing units (cpu's). Of course, the number of requested cpu's
-#' \code{nCpuCores} must be less than or equal to the actual number.
-#' The total number of
-#' chains is \code{nCpuCores} times \code{nChainsPerCore}.
+#' \code{nCpuCores} must be less than or equal to the actual number. The
+#' parallel computations are organized in the following manner:
+#' \code{nCpuCores} cpu's
+#' are requested from the operating system; each cpu computes one chain
+#' are writes the result to a file in directory \code{procDir}. This process
+#' is repeated until the number of sets of parallel computation equals
+#' \code{nRepetitions}.
 #'
-#' Each chain has 1000 samples, of which 500 are warm-up and 500 are post
-#' warm-up. These values are fixed.
-#'
-#' The finite mixture model, which has two pdfs, involves five parameters:
+#' @return The returned values may be conveniently divided into two groups.
+#' First, the samples in a single chain are stored in \code{stanfit} object,
+#' which is described in the rstan documentation. The samples are of
+#' the following model parameters:
 #' \describe{
 #'  \item{theta}{Proportion of population associated with pdf 1.}
 #'  \item{mu1}{Mean vector for pdf 1.}
 #'  \item{mu2}{Mean vector for pdf 2.}
-#'  \item{Sigma1}{Covariance matrix for pdf 1.}
-#'  \item{Sigma2}{Covariance matrix for pdf 2.}
-#' }
-#' There are also two additional variables associated with the model:
-#' \describe{
-#'  \item{g}{Conditional probability that a field sample is associated
-#'  with pdf 1.}
+#'  \item{tau1}{Standard deviation vector for pdf 1.}
+#'  \item{tau2}{Standard deviation vector for pdf 2.}
+#'  \item{L_Omega1}{Lower triangle of the correlation matrix for pdf 1.}
+#'  \item{L_Omega2}{Lower triangle of the correlation matrix for pdf 2.}
 #'  \item{log_lik}{The logarithm of the likelihood function.}
 #' }
+#' The \code{stanfit} object is written to a file in directory \code{procDir}.
+#' The file names have the form "RawSamples?-?.dat" for which the first
+#' ? is replaced by the repetition number and the second ? is replaced by the
+#' cpu number. The important point is that the file name is unique.
 #'
-#' The optimzation may fail to converge to a mode of the posterior pdf because
-#' the likelihood function is unbounded (Marin et al., 2005).
-#' Consequently, checking the results of the optimization is important.
-#'
-#' @return A list with the following components is returned.
-#' @return \item{stanSamples}{List for which the size equals the total number
-#' of chains. Each element is itself a list containing the samples for
-#' one chain. The samples are of the five parameters in the finite mixture
-#' model and of the two additional variables, which are described in Details.
-#' Only the 500 samples after warm-up are included, and their order is permuted.}
-#' @return \item{stanSelectedTraces}{List for which the size equals the total number
-#' of chains. Each element is itself a list containing the samples for
-#' one chain. The samples are of \code{theta}, \code{mu1[1]} (the element 1
-#' of vector \code{mu1}), \code{Sigma1[1,1]} (the element 1,1
-#' of matrix \code{Sigma1}), \code{mu2[1]} (the element 1
-#' of vector \code{mu2}), and \code{Sigma2[1,1]} (the element 1,1
-#' of matrix \code{Sigma2}). Only the 500 samples after warm-up are included,
-#' and their order is not permuted.}
-#' @return \item{samplingParams}{List with 3 elements: nChains (the number
-#' of chains), nTotalSamplesPerChain (the total number of samples per
-#' chain), and nSamplesPerChain (the number of samples per chain after
-#' warm-up.)}
+#' Second, a list with 4 elements is returned by the function:
+#' @return \item{nChains}{Number of chains.}
+#' @return \item{nSamplesPerChain}{See argument \code{nSamplesPerChain}.}
+#' @return \item{nSamplesPWU}{Number of samples, post warm-up. This
+#' number is one-half of \code{nSamplesPerChain}.}
+#' @return \item{fileNames}{Vector containing the names of the files
+#' with the \code{stanfit} objects.}
 #'
 #' @references
 #' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B., Vehtari, A.,
@@ -557,13 +661,14 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 #' @examples
 #' \dontrun{
 #' fmmSamples <- sampleFmm(transData, nPCs, tauBounds = c(0.001,20),
-#'                         nChainsPerCore = 5, nCpuCores = 7)
+#'                         nCpuCores = 7, nRepetitions = 4,
+#'                         procDir = "Process121")
 #' }
 #'
 #' @export
 sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
                       nSamplesPerChain = 1000,
-                      nRepetitions = 2, nCpuCores = 4, procDir = NULL) {
+                      nCpuCores = 4, nRepetitions = 2, procDir = NULL) {
 
   rstanParallelSampler <- function(stanData, nSamplesPerChain,
                                    rng_seed, nCpuCores, iRep, procDir ) {
@@ -587,7 +692,8 @@ sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
                                     chains = 1, iter = nSamplesPerChain,
                                     seed = rng_seed, chain_id = cid,
                                     pars=c("theta", "mu1", "mu2",
-                                           "Sigma1", "Sigma2", "log_lik", "g"),
+                                           "tau1", "tau2",
+                                           "L_Omega1", "L_Omega2", "log_lik"),
                                     save_dso = FALSE)
 
       fileName <- paste("RawSamples", iRep, "-", cid, ".dat", sep = "")
@@ -646,9 +752,11 @@ sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
 #'  pdf 1 (theta)
 #' }
 #'
+#' This function may require a lot of time (e.g., 1 or 2 minutes).
+#'
 #' @examples
 #' \dontrun{
-#' plotTraces(fmmSamples)
+#' plotModeLikelihoods(fmmMode_mclust, fmmMode_rstan, binwidthScale = 100)
 #' }
 #'
 #' @export
@@ -682,33 +790,37 @@ plotModeLikelihoods <- function(fmmMode_mclust, fmmMode_rstan,
 #' @description Plot selected traces for each chain to assess whether
 #' within-chain label switching has occurred.
 #'
-#' @param fmmSamples
-#' List containing samples of the posterior pdf and
-#' related information. This list is return by function
-#' \code{\link{sampleFmm}}; the documentation for function sampleFmm includes
-#' a complete description of container \code{fmmSamples}.
+#' List containing, among other things, the names of the files in which the
+#' \code{stanfit} objects are stored. These objects contain the samples
+#' of the posterior pdf. This list is return by function
+#' \code{\link{sampleFmm}}, for which the documentation includes
+#' a complete description of container \code{samplePars}.
+#'
+#' @param procDir
+#' Directory containing the files with the \code{stanfit} objects.
 #'
 #' @details
-#' Three plots are generated:
+#' A set of three plots are generated for each chain. The set comprises
 #' \itemize{
-#'  \item The first plot comprises two traces: A trace for element [1]
+#'  \item A plot of one trace: the model proportion associated with
+#'  pdf 1 (theta)
+#'  \item A plot of two traces: A trace for element [1]
 #'  of the mean vector for pdf 1 (mu1[1]), and another trace for
 #'  element [1] of the mean vector for pdf 2 (mu2[1]).
-#'  \item The second plot also comprises two traces: A trace for element [1,1]
-#'  of the covariance matrix for pdf 1 (Sigma1[1,1]), and another trace for
-#'  element [1,1] of the covariance matrix for pdf 2 (Sigma2[1,1]).
-#'  \item The third plot has one trace of model proportion associated with
-#'  pdf 1 (theta)
+#'  \item A plot of two traces: A trace for element [1]
+#'  of the standard deviation vector for pdf 1 (tau1[1]), and another trace for
+#'  element [1] of the standard deviation vector for pdf 2 (tau2[1]).
 #' }
 #'
 #' @examples
 #' \dontrun{
-#' plotTraces(fmmSamples)
+#' plotTraces(samplePars, procDir)
 #' }
 #'
 #' @export
 plotSelectedTraces <- function(samplePars, procDir) {
 
+  sampleIndices <- 1:samplePars$nSamplesPWU + samplePars$nSamplesPWU
   N <- length(samplePars$fileNames)
   for(i in 1:N){
 
@@ -717,38 +829,38 @@ plotSelectedTraces <- function(samplePars, procDir) {
     load( paste(procDir, "\\", samplePars$fileNames[i], sep = ""))
     theSamples <- rstan::extract(rawSamples, permuted = FALSE)
 
-    df1 <- data.frame(indices = 1:samplePars$nSamplesPWU,
-                     y = theSamples[, 1, "theta"] )
-    p1 <- ggplot2::ggplot( df1,
-                           ggplot2::aes(x = df1$indices, y = df1$y),
+    df <- data.frame(indices = sampleIndices,
+                     theta = theSamples[, 1, "theta"],
+                     mu1 = theSamples[, 1, "mu1[1]"],
+                     mu2 = theSamples[, 1, "mu2[1]"],
+                     tau1 = theSamples[, 1, "tau1[1]"],
+                     tau2 = theSamples[, 1, "tau2[1]"] )
+
+    p1 <- ggplot2::ggplot( df,
+                           ggplot2::aes(x = indices, y = theta),
                            environment = environment() ) +
       ggplot2::geom_line() +
       ggplot2::xlab("Sample index") +
-      ggplot2::ylab("theta")
+      ggplot2::ylab("theta") +
+      ggplot2::ggtitle(paste("Chain ", i, sep = ""))
 
-    df2 <- data.frame(indices = 1:samplePars$nSamplesPWU,
-                     y1 = theSamples[, 1, "mu1[1]"],
-                     y2 = theSamples[, 1, "mu2[1]"])
-    p2 <- ggplot2::ggplot( df2,
-                           ggplot2::aes(x = df2$indices),
+    p2 <- ggplot2::ggplot( df,
+                           ggplot2::aes(x = indices),
                            environment = environment() ) +
-      ggplot2::geom_line(ggplot2::aes(y = df2$y1, colour = "1")) +
-      ggplot2::geom_line(ggplot2::aes(y = df2$y2, colour = "2")) +
+      ggplot2::geom_line(ggplot2::aes(y = mu1, colour = "1")) +
+      ggplot2::geom_line(ggplot2::aes(y = mu2, colour = "2")) +
       ggplot2::scale_color_manual("Pdf", values = c("1" = "blue", "2" = "red")) +
       ggplot2::xlab("Sample index") +
-      ggplot2::ylab("Element [1] of mean vectors")
+      ggplot2::ylab("Element 1 of mean vectors")
 
-    df3 <- data.frame(indices = 1:samplePars$nSamplesPWU,
-                      y1 = theSamples[, 1, "Sigma1[1,1]"],
-                      y2 = theSamples[, 1, "Sigma2[1,1]"])
-    p3 <- ggplot2::ggplot( df3,
-                           ggplot2::aes(x = df3$indices),
+    p3 <- ggplot2::ggplot( df,
+                           ggplot2::aes(x = indices),
                            environment = environment() ) +
-      ggplot2::geom_line(ggplot2::aes(y = df3$y1, colour = "1")) +
-      ggplot2::geom_line(ggplot2::aes(y = df3$y2, colour = "2")) +
+      ggplot2::geom_line(ggplot2::aes(y = tau1, colour = "1")) +
+      ggplot2::geom_line(ggplot2::aes(y = tau2, colour = "2")) +
       ggplot2::scale_color_manual("Pdf", values = c("1" = "blue", "2" = "red")) +
       ggplot2::xlab("Sample index") +
-      ggplot2::ylab("Element [1, 1] of variance matrices")
+      ggplot2::ylab("Element 1 of std dev vectors")
 
     grid::grid.newpage()
     grid::pushViewport(grid::viewport(layout=grid::grid.layout(3,1)))
@@ -756,7 +868,7 @@ plotSelectedTraces <- function(samplePars, procDir) {
     print(p2, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
     print(p3, vp=grid::viewport(layout.pos.row=3, layout.pos.col=1))
 
-    # devAskNewPage( ask = options()$device.ask.default )
+    devAskNewPage( ask = options()$device.ask.default )
   }
 }
 
@@ -765,66 +877,56 @@ plotSelectedTraces <- function(samplePars, procDir) {
 #' @description Plot point statistics for each chain, the mode calculated with
 #' function mclust, and the mode calculated with rstan.
 #'
-#' @param fmmSamples
-#' List containing samples of the posterior pdf and
-#' related information. This list is return by function
-#' \code{\link{sampleFmm}}; the documentation for function sampleFmm includes
-#' a complete description of container \code{fmmSamples}.
-#' @param fmmMode_mclust  List containing information about the optimization
+#' @param samplePars
+#' List containing, among other things, the names of the files in which the
+#' \code{stanfit} objects are stored. These objects contain the samples
+#' of the posterior pdf. This list is return by function
+#' \code{\link{sampleFmm}}, for which the documentation includes
+#' a complete description of container \code{samplePars}.
+#'
+#' @param fmmMode_mclust
+#' List containing information about the optimization
 #' of the posterior pdf for which the model and the optimization are
 #' performed by package mclust. This list is returned by
-#' function \code{\link{optFmm_mclust}}; the documentation for
-#' function optFmm_mclust includes a complete description of container
-#' \code{fmmMode_mclust}.
+#' function \code{\link{optFmm_mclust}}, for which the documentation
+#' includes a complete description of container \code{fmmMode_mclust}.
 #'
-#' @param fmmMode_rstan List containing information about the optimization
+#' @param fmmMode_rstan
+#' List containing information about the optimization
 #' of the posterior pdf for which the model and the optimization are
 #' performed by package rstan. This list is returned by
-#' function \code{\link{optFmm_rstan}}; the documentation for
-#' function optFmm_rstan includes a complete description of container
-#' \code{fmmMode_rstan}.
+#' function \code{\link{optFmm_rstan}}, for which the documentation
+#' includes a complete description of container \code{fmmMode_rstan}.
+#'
+#' @param procDir
+#' Directory containing the files with the \code{stanfit} objects.
+#'
 #' @param excludedChains Vector with the indices of the chains for which
 #' the point statistics are not used to calculate plot ranges. See Details.
 #'
 #' @details
-#' The point statistics are calculated and plotted for five model
-#' parameters and two addtional variables:
-#' \itemize{
-#'  \item The first element of the mean vector for pdf 1, which is
-#' designated "mu1[1]."
-#'  \item The first element of the mean vector for pdf 2, which is
-#' designated "mu2[1]."
-#'  \item The first element of the covariance matrix for pdf 1, which is
-#' designated "Sigma1[1,1]."
-#'  \item The first element of the covariance matrix for pdf 2, which is
-#' designated "Sigma2[1,1]."
-#'  \item The proportion in the finite mixture model associated with pdf 1,
-#' which is designated "theta."
-#'  \item The logarithm of the likelihood, which is
-#' designated "Log-likelihood."
-#'  \item The logarithm of the posterior pdf, which is
-#' designated "Log-Posterior Pdf."
-#' }
+#' The point statistics are calculated and plotted for element 1 of the
+#' two mean vectors, element 1 of the two standard deviation vectors,
+#' theta (the proportion associated with pdf1), and the log-likelihood.
 #'
-#' To prevent a point statistic from being included in the calculation of
+#' To prevent a point statistic associated with a sampling chain
+#' from being included in the calculation of
 #' the plot range, the index of the associated chain is specified in
 #' argument \code{excludedChains}.
 #'
 #' @examples
 #' \dontrun{
-#' plotPointStats(fmmSamples, fmmMode_mclust, fmmMode_rstan,
-#'                excludedChains = NULL)
+#' plotPointStats(samplePars, fmmMode_mclust, fmmMode_rstan)
 #' }
 #'
 #' @export
-plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan,
+plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan, procDir,
                            excludedChains = NULL ) {
 
   N <- length(samplePars$fileNames)
 
   statNames <-
-    c("mu1[1]","mu2[1]","Sigma1[1,1]","Sigma2[1,1]","theta","log_lik",
-      "lp__")
+    c("mu1[1]","mu2[1]","tau1[1]","tau2[1]","theta","log_lik", "lp__")
 
   probs <- c(0.025, 0.50, 0.975)
   theQuantiles <- array(NA_real_,
@@ -904,13 +1006,13 @@ plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan,
                   excludedChains,
                   fmmMode_mclust$parameters$mean[1,1:2],
                   c(fmmMode_rstan$par$mu1[1],fmmMode_rstan$par$mu2[1]),
-                 "Element [1] of the mean vectors")
-  p2 <- Internal2(theQuantiles[, "Sigma1[1,1]", ],
-                  theQuantiles[, "Sigma2[1,1]", ],
+                 "Element 1 of the mean vectors")
+  p2 <- Internal2(theQuantiles[, "tau1[1]", ],
+                  theQuantiles[, "tau2[1]", ],
                   excludedChains,
-                  fmmMode_mclust$parameters$variance$sigma[1,1,1:2],
-                  c(fmmMode_rstan$par$Sigma1[1,1],fmmMode_rstan$par$Sigma2[1,1]),
-                 "Element [1,1] of the variance matrices")
+                  sqrt(fmmMode_mclust$parameters$variance$sigma[1,1,1:2]),
+                  c(fmmMode_rstan$par$tau1[1],fmmMode_rstan$par$tau2[1]),
+                 "Element 1 of the standard deviation vectors")
   p3 <- Internal1(theQuantiles[, "theta", ], excludedChains,
                fmmMode_mclust$parameters$pro[1],
                fmmMode_rstan$par$theta,
@@ -934,11 +1036,13 @@ plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan,
 #' @description Combine selected chains, creating one set of samples for each
 #' parameter in the finite mixture model.
 #'
-#' @param fmmSamples      List, which includes the Monte Carlo chains and
-#'                        other data, returned by function
-#'                        \code{\link{sampleFmm}}; the
-#'                        documentation for fmmSample includes a complete
-#'                        description of fmmSamples.
+#' @param samplePars
+#' List containing, among other things, the names of the files in which the
+#' \code{stanfit} objects are stored. These objects contain the samples
+#' of the posterior pdf. This list is return by function
+#' \code{\link{sampleFmm}}, for which the documentation includes
+#' a complete description of container \code{samplePars}.
+#'
 #' @param selectedChains  Dataframe listing the indices of the chains that
 #'  are combined. (See Details).
 #'
@@ -952,44 +1056,42 @@ plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan,
 #' To understand \code{selectedChains} consider two examples. (1) Assume that
 #' row 1 of \code{selectedChains} comprises the values 2 and FALSE. These
 #' values
-#' indicate that chain 2 will be combined and that the variables in the
+#' indicate that chain 2 will be included in the combination and that
+#' the variables in the
 #' finite mixture model are not switched. That is, variable mu1 in the
 #' chain is assigned to mu1, variable mu2 in the chain is assiged to mu2, and
 #' so on. (2) Assume that
 #' row 2 of \code{selectedChains} comprises the values 4 and TRUE. These
 #' values
-#' indicate that chain 4 will be combined and that the variables in the
+#' indicate that chain 4 will be included in the combination and
+#' that the variables in the
 #' finite mixture model are switched. That is, variable mu1 in the
 #' chain is assigned to mu2, variable mu2 in the chain is assiged to mu1, and
 #' so on.
 #'
-#' @return A list with the following components is returned.
-#' @return \item{theta}{Vector containing samples of the proportion
-#' associated with pdf 1 that is within the finite mixture model.}
-#' @return \item{mu1}{Matrix containing Monte Carlo
-#' samples of the mean vector for pdf 1. The first dimension of the matrix
-#' pertains to indices of the samples; the second dimension pertains to
-#' indices of the mean vector.}
-#' @return \item{mu2}{Matrix containing Monte Carlo
-#' samples of the mean vector for pdf 2. Its structure is identical to
-#' that for \code{mu1}.}
-#' @return \item{Sigma1}{Array containing Monte Carlo samples of the
-#' covariance matrix
-#' for pdf 1. The first dimension of the array pertains to indices of
-#' the samples; the second and the third dimensions pertain to indices of
-#' the covariance matrix.}
-#' @return \item{Sigma2}{Array containing samples of the covariance matrix
-#' for pdf 2. Its structure is identical to that for \code{Sigma1}.}
-#' @return \item{g}{Matrix containing Monte Carlo samples of the
-#' conditional probabilites that the field samples are associated with pdf 1.
-#' The first dimension of the matrix
-#' pertains to indices of the Monte Carlo samples;
-#' the second dimension pertains to
-#' indices of the field samples. }
+#' @return The returned value is a \code{stanfit} object,
+#' which is described in the rstan documentation. This object comprises
+#' the multiple chains, which have samples of
+#' the following model parameters:
+#' \describe{
+#'  \item{theta}{Proportion of population associated with pdf 1.}
+#'  \item{mu1}{Mean vector for pdf 1.}
+#'  \item{mu2}{Mean vector for pdf 2.}
+#'  \item{tau1}{Standard deviation vector for pdf 1.}
+#'  \item{tau2}{Standard deviation vector for pdf 2.}
+#'  \item{L_Omega1}{Lower triangle of the correlation matrix for pdf 1.}
+#'  \item{L_Omega2}{Lower triangle of the correlation matrix for pdf 2.}
+#'  \item{log_lik}{The logarithm of the likelihood function.}
+#' }
+#'
+#' @references
+#  Stan Development Team, 2015, Stan Modeling Language - User’s Guide
+#' and Reference Manual, Version 2.6.0, available on line at
+#' http://mc-stan.org/ (last accessed October 2015).
 #'
 #' @examples
 #' \dontrun{
-#' combinedChains <- combineChains(fmmSamples$stanSamples, selectedChains)
+#' combinedChains <- combineChains(samplePars, selectedChains)
 #' }
 #'
 #' @export
@@ -1006,6 +1108,8 @@ combineChains <- function(samplePars, selectedChains) {
 
       N <- rawSamples@par_dims$mu1
       for(i in 1:N) {
+
+        # mean vectors
         var1 <- paste("rawSamples@sim$samples[[1]]$\"mu1[", i, "]\"", sep="")
         tmp1 <- eval(parse(text = var1))
 
@@ -1016,11 +1120,23 @@ combineChains <- function(samplePars, selectedChains) {
 
         eval(parse(text = paste(var2, " <- tmp1")))
 
+        # standard deviation vectors
+        var1 <- paste("rawSamples@sim$samples[[1]]$\"tau1[", i, "]\"", sep="")
+        tmp1 <- eval(parse(text = var1))
+
+        var2 <- paste("rawSamples@sim$samples[[1]]$\"tau2[", i, "]\"", sep="")
+        tmp2 <- eval(parse(text = var2))
+
+        eval(parse(text = paste(var1, " <- tmp2")))
+
+        eval(parse(text = paste(var2, " <- tmp1")))
+
+        # lower triangles of the cholesky decompositions of the correlation matrices
         for(j in 1:N) {
-          var1 <- paste("rawSamples@sim$samples[[1]]$\"Sigma1[", i, ",", j, "]\"", sep="")
+          var1 <- paste("rawSamples@sim$samples[[1]]$\"L_Omega1[", i, ",", j, "]\"", sep="")
           tmp1 <- eval(parse(text = var1))
 
-          var2 <- paste("rawSamples@sim$samples[[1]]$\"Sigma2[", i, ",", j, "]\"", sep="")
+          var2 <- paste("rawSamples@sim$samples[[1]]$\"L_Omega2[", i, ",", j, "]\"", sep="")
           tmp2 <- eval(parse(text = var2))
 
           eval(parse(text = paste(var1, " <- tmp2")))
@@ -1030,14 +1146,6 @@ combineChains <- function(samplePars, selectedChains) {
         }
       }
 
-      M <- rawSamples@par_dims$g
-      for(i in 1:M) {
-        var <- paste("rawSamples@sim$samples[[1]]$\"g[", i, "]\"", sep="")
-        tmp <- eval(parse(text = var))
-        eval(parse(text = paste(var, " <- 1 - tmp")))
-      }
-
-
     }
     sfList[[k]] <- rawSamples
 
@@ -1046,95 +1154,167 @@ combineChains <- function(samplePars, selectedChains) {
   return(rstan::sflist2stanfit(sfList))
 }
 
-#' @title Calculate test quantities for model checking
+#' @title Calculate conditional probabilities
 #'
-#' @description Calculate test quantities for posterior predictive checking
+#' @description Calculate, for each field sample, Monte Carlo samples of
+#' the conditional probability that the field sample is
+#' associated with the first probability density function in the finite
+#' mixture model.
+#'
+#' @param transData     List containing the transformed geochemical
+#' concentrations and related information.
+#' This list is return by function \code{\link{transformGcData}}, for which the
+#' documentation includes a complete description of container \code{transData}.
+#' @param nPCS          Number of principal components that were used in the
+#'                      finite mixture model.
+#' @param combinedChains
+#' A \code{stanfit} object containg multiple Monte Carlo chains. This
+#' object is return by function \code{\link{combineChains}}, for which the
+#' documentation includes a complete description of container
+#' \code{combinedChains}.
+#'
+#' @details
+#' The conditional probabilities are calculated using the formula in Gelman
+#' et al. (2014, p. 540 bottom).
+#'
+#' @return A matrix containing the Monte Carlo samples of the
+#' conditional probabilites. The number of matrix columns equals the
+#' number of field samples, and the number of matrix rows equals the
+#' number of Monte Carlo samples in \code{combinedChains}. That is,
+#' column j of the matrix contains Monte Carlo samples of the conditional
+#' probability that field sample j is associated with the first probability
+#' density function in the finite mixture model.
+#'
+#' @references
+#' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B., Vehtari, A.,
+#' and Rubin, D.B., 2014, Bayesian data analysis (3rd ed.),
+#' CRC Press.
+#'
+#' @examples
+#' \dontrun{
+#' condProbs1 <- calcCondProbs1(transData, nPCs, combinedChains)
+#' }
+#'
+#'
+#' @export
+calcCondProbs1 <- function(transData, nPCs, combinedChains) {
+
+  theSamples <- rstan::extract(combinedChains)
+
+  nMCSamples <- length(theSamples$theta)
+  nFldSamples <- nrow(transData$robustPCs)
+
+  condProb <- matrix(NA_real_, ncol = nFldSamples, nrow = nMCSamples )
+
+  for(i in 1:nMCSamples){
+
+    L_Sigma1 <- theSamples$tau1[i, ] * theSamples$L_Omega1[i, , ]
+    Sigma1 <- L_Sigma1 %*% t(L_Sigma1)
+    ps1 <- log(theSamples$theta[i]) +
+      mvtnorm::dmvnorm( transData$robustPCs[,1:nPCs],
+                        mean = theSamples$mu1[i, ],
+                        sigma = Sigma1, log = TRUE )
+
+    L_Sigma2 <- theSamples$tau2[i, ] * theSamples$L_Omega2[i, , ]
+    Sigma2 <- L_Sigma2 %*% t(L_Sigma2)
+    ps2 <- log(1-theSamples$theta[i]) +
+      mvtnorm::dmvnorm( transData$robustPCs[,1:nPCs],
+                        mean = theSamples$mu2[i, ],
+                        sigma = Sigma2, log = TRUE )
+
+    log_denom <- log(exp(ps1) + exp(ps2))
+    condProb[i,] <- exp(ps1 - log_denom)
+
+  }
+  return(condProb)
+}
+
+#' @title Calculate observed test quantities for model checking
+#'
+#' @description Calculate test quantities for posterior
+#' predictive checking
 #' of the parameters in the finite mixture model. The test quantities pertain
 #' to the observed data that have undergone both the isometric log-ratio
 #' transform and the robust, principal component transform.
 #'
 #' @param transData     List containing the transformed geochemical
 #' concentrations and related information.
-#' This list is return by function \code{\link{transformGcData}}; the
-#' documentation for function transformGcData includes a complete
-#' description of container \code{transData}.
-#' @param nPCS          Number of principal components that are used in the
-#'                      finite mixture model (See Details).
-#' @param combinedChains     List in which each element contains the
-#' Monte Carlo samples of a parameter from the finite mixture model.
-#' This list is return by function \code{\link{combineChains}}; the
-#'                        documentation for function combineChains includes a
-#'                        complete description of container
-#'                        \code{combinedChains}.
+#' This list is return by function \code{\link{transformGcData}}, for which the
+#' documentation includes a complete description of container \code{transData}.
+#' @param nPCS          Number of principal components that were used in the
+#'                      finite mixture model.
+#' @param condProbs1
+#' A matrix containing the Monte Carlo samples of the
+#' conditional probabilites. This matrix is returned by function
+#' \code{\link{calcCondProbs}}, for which the documentation includes a
+#' complete descriptoin of container \code{condProbs1}.
 #'
 #' @details
-#' The number of principal components is specified by \code{nPCS}. For example,
-#' if \code{nPCS} equals 7, then components 1, 2, ..., 7 are used in the
-#' finite mixture model. These components are in columns 1 through 7 of
-#' matrix \code{robustPCs}.
+#' Test quantities are defined in Gelman et al. (2014, p. 145) and
+#' are used for posterior predictive checking of the finite mixture model.
 #'
 #' @return A list with the following test quantities is returned.
-#' @return \item{mu1}{Vector containing the test quantity for the mean for
-#' pdf 1.}
-#' @return \item{mu2}{Vector containing the test quantity for the mean for
-#' pdf 1.}
-#' @return \item{Sigma1}{Matrix containing the test quantity for the covariance
-#' matrix for pdf 1.}
-#' @return \item{Sigma2}{Matrix containing the test quantity for the covariance
-#' matrix for pdf 1.}
+#' @return \item{mu1}{Mean vector for pdf 1.}
+#' @return \item{mu2}{Mean vector for pdf 2.}
+#' @return \item{tau1}{Standard deviation vector for pdf 1.}
+#' @return \item{tau2}{Standard deviation vector for pdf 2.}
+#' @return \item{Corr1}{Correlation matrix for pdf 1.}
+#' @return \item{Corr2}{Correlation matrix for pdf 2.}
+#'
+#' @references
+#' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B.,
+#' Vehtari, A., and Rubin, D.B., 2014, Bayesian data analysis (3rd ed.):
+#' CRC Press.
 #'
 #' @examples
 #' \dontrun{
-#' obsTestQuantities <- calcObsTestQuantities(transData, nPCS, combinedChains)
+#' obsTestQuantities <- calcObsTestQuantities(transData, nPCS, condProbs1)
 #' }
 #'
 #'
 #' @export
-calcObsTestQuantities <- function(transData, nPCS, combinedChains) {
+calcObsTestQuantities <- function(transData, nPCS, condProbs1) {
 
   # associated with pdf 1
-  condProb1 <- rstan::extract(combinedChains, pars="g")$g
-  S1 <- cov.wt(transData$robustPCs[,1:nPCs], wt = colMeans(condProb1) )
+  S1 <- cov.wt(transData$robustPCs[,1:nPCs], wt = colMeans(condProbs1) )
 
   # associated with pdf 2
-  condProb2 <- 1 - condProb1
-  S2 <- cov.wt(transData$robustPCs[,1:nPCs], wt = colMeans(condProb2) )
+  condProbs2 <- 1 - condProbs1
+  S2 <- cov.wt(transData$robustPCs[,1:nPCs], wt = colMeans(condProbs2) )
 
   return(list(mu1 = S1$center,
               mu2 = S2$center,
-              Sigma1 = S1$cov,
-              Sigma2 = S2$cov))
+              tau1 = sqrt(diag(S1$cov)),
+              tau2 = sqrt(diag(S2$cov)),
+              Corr1 = cov2cor(S1$cov),
+              Corr2 = cov2cor(S2$cov)))
 
 }
 
 
-#' @title Plot test quantities for model checking
+#' @title Check model
 #'
-#' @description The test quantities are the elements of the mean vector,
-#' the standard deviations from the diagonal of the covariance matrix, or
-#' the correlation matrix derived from the diagonal matrix.
-#' These statistics pertain to one of the two pdfs in the finite mixture model.
-#' One set of test quantities
-#' are calcuated from the data, which have undergone both the isometric
-#' log-ratio transform and the robust, principal component transform. The other
-#' set of test quantities are calculated from the Monte Carlo samples.
-#' This function plots the test quantities so that they can be compared;
-#' this comparison is a graphical posterior predictive check of the model.
+#' @description Perform posterior predictive checking of the
+#' finite mixture model. The checks are performed for
+#' the mean vector, the standard deviation vector, and
+#' the correlation matrix for both pdfs in the model.
+#' The test quantities for the observed data were calculated by function
+#' \code{\link{obsTestQuantities}}. The test quantities for the
+#' replicated data are the Monte Carlo samples for the parameters in the
+#' finite mixture model.
+#' This function plots the test quantities so that they can be compared.
 #'
-#' @param combinedChains    List in which each element contains the
-#' Monte Carlo samples of a parameter from the finite mixture model.
-#' This list is return by function \code{\link{combineChains}}; the
-#'                        documentation for function combineChains includes a
-#'                        complete description of container
-#'                        \code{combinedChains}.
+#' @param combinedChains
+#' A \code{stanfit} object containg multiple Monte Carlo chains. This
+#' object is return by function \code{\link{combineChains}}, for which the
+#' documentation includes a complete description of container
+#' \code{combinedChains}.
 #'
-#' @param obsTestQuantities     List containing the test quantities for
-#' posterior predicted checks of the finit mixture model.
-#' This list is return by function \code{\link{calcObsTestQuantities}}; the
-#'                        documentation for function calcObsTestQuantities
-#'                        includes a
-#'                        complete description of container
-#'                        \code{obsTestQuantities}.
+#' @param obsTestQuantities
+#' List containing the test quantities for the observed data.
+#' This list is return by function \code{\link{calcObsTestQuantities}},
+#' for which the documentation includes a
+#' complete description of container \code{obsTestQuantities}.
 #'
 #' @param pdf   Index for the pdf in the finite mixture model. It must be
 #' either 1 or 2.
@@ -1143,7 +1323,7 @@ calcObsTestQuantities <- function(transData, nPCS, combinedChains) {
 #' matrix).
 #' @param intervalPercentage Interval for the distributions of the test
 #' quantity. Typical values might be 50, 90, or 95. Not used when
-#' argument testQuantity is "cor".
+#' argument testQuantity is "corr".
 #' @param arePValuesPlotted   Logical variable indicating whether the p-values
 #' are plotted.
 #'
@@ -1173,6 +1353,16 @@ calcObsTestQuantities <- function(transData, nPCS, combinedChains) {
 #' (There is one exception: If the scaled p-value is 100, then three
 #' characters are needed to print it. But this exception should occur rarely.)
 #'
+#' The plot for the correlation matrix has two parts, which are appear on the
+#' left and the right sides of the graphic. The left side presents a comparison
+#' of the correlation matrices:  Below the diagonal, which is solid red, is
+#' half of the correlation matrix calculated from the field data.
+#' Above the diagonal is half of the correlation matrix, which is the mean
+#' correlation matrix calculated from the Monte Carlo samples.
+#' The right side presents the associated p-values.
+#' The color scale ranges from the smallest calculated p-value to 0.5,
+#' which is the largest possible p-value (based on the previous definition).
+#'
 #' @references
 #' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B.,
 #' Vehtari, A., and Rubin, D.B., 2014, Bayesian data analysis (3rd ed.):
@@ -1189,7 +1379,7 @@ calcObsTestQuantities <- function(transData, nPCS, combinedChains) {
 #'                      arePValuesPlotted = TRUE )
 #'
 #' plotTestComparison( combinedChains, obsTestQuantities,
-#'                      pdf = 1, testQuantity = "cor",
+#'                      pdf = 1, testQuantity = "corr",
 #'                      arePValuesPlotted = TRUE )
 #' }
 #'
@@ -1199,71 +1389,56 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
                                 intervalPercentage = 95,
                                 arePValuesPlotted = FALSE ) {
 
-  ExtractSd <- function(Sigma) {
-    tmp <- dim(Sigma)
-    nMcSamples <- tmp[1]
-    M <- tmp[2]
-    sampSd <- matrix(NA_real_, nrow = nMcSamples, ncol = M)
-    for(i in 1:nMcSamples) {
-      sampSd[i, ] <- sqrt(diag(Sigma[i, ,]))
-    }
-    return(sampSd)
-  }
-
-  PlotModelCheck <- function( testStat, sampModelStat, intervalPercentage,
+  PlotModelCheck <- function( Tobs, Trep, intervalPercentage,
                               arePValuesPlotted, plotTitle ){
 
-    origPar <- par( lend="butt" )
-    on.exit(par(origPar), add = TRUE )
-
-    M <- ncol(sampModelStat)
-    nMcSamples <- nrow(sampModelStat)
+    nComponents <- ncol(Trep)
+    nMcSamples <- nrow(Trep)
 
     tailPercentage <- 0.5*(100.0-intervalPercentage)
-    interval <- c(tailPercentage,100.0-tailPercentage)/100.0
+    probs <- c(tailPercentage, 50, 100.0-tailPercentage)/100.0
+    theQuantiles <- t(apply(Trep, 2, quantile, probs = probs, names = FALSE))
 
-    yLimits <- range(sampModelStat, testStat )
-
-    plot( c(1,M), yLimits, type="n",
-          xlim=c(0.5,M+0.5), ylim=yLimits,
-          xlab="Component", ylab="ilr and pc-transformed concentration (no units)",
-          main=plotTitle )
-    tmp <- par()$usr
-    rect(tmp[1], tmp[3], tmp[2], tmp[4], col="gray90")
-
-    for(j in 1:M) {
-
-      lines( c(j-0.5,j+0.5), rep.int(testStat[j],2), lwd=3, col="orange" )
-
-      theQuantiles <- quantile(sampModelStat[, j], probs=c(interval,0.50),
-                               names = FALSE)
-      lines( c(j,j), theQuantiles[1:2], lwd=1 )
-      lines( c(j-0.5,j+0.5), rep.int(theQuantiles[3],2), lwd=1 )
+    pValues <- vector(mode="numeric", length=nComponents )
+    for(j in 1:nComponents) {
+      # defined in Gelman et al., p. 146
+      tmp <- sum(Trep[, j] > Tobs[j]) / nMcSamples
+      pValues[j] <- ifelse(tmp <= 0.5, tmp, 1-tmp)
     }
+    scaledPValues <- round(pValues*100, digits=0)
+
+    df <- data.frame(x = 1:nComponents,
+                     Trep_50 = theQuantiles[, 2],
+                     Trep_min = theQuantiles[, 1],
+                     Trep_max = theQuantiles[, 3],
+                     T_obs = Tobs,
+                     scaledPValues = scaledPValues)
+
+    p <- ggplot2::ggplot(df,
+                         ggplot2::aes(x = x),
+                         environment = environment()) +
+      ggplot2::geom_point(ggplot2::aes(y = Tobs),
+                          shape = 16, size = 4, colour="#FF6C91") +
+      ggplot2::geom_pointrange(ggplot2::aes(y = Trep_50, ymin = Trep_min,
+                                            ymax = Trep_max), shape = 3) +
+      ggplot2::xlab("Component") +
+      ggplot2::ylab("Transformed concentration (no units)")
 
     if(arePValuesPlotted) {
-      pValues <- vector(mode="numeric", length=M )
-      for(j in 1:M) {
-        # defined in Gelman et al., p. 146
-        tmp <- sum(sampModelStat[, j] > testStat[j]) / nMcSamples
-        pValues[j] <- ifelse(tmp <= 0.5, tmp, 1-tmp)
-      }
-      scaledPValues <- round(pValues*100, digits=0)
 
-      mtext( scaledPValues,
-             side=3, line=0, at=1:M, cex=0.6,
-             col=ifelse(scaledPValues < 10, "red", "black") )
-
+      p <- p + ggplot2::geom_text(ggplot2::aes(y = max(Trep_max),
+                                               label = scaledPValues),
+                                  size = 3, vjust = 0,
+                                  colour = ifelse(scaledPValues < 10, "red", "black"))
     }
+    print(p)
   }
 
-  PlotCorCheck <- function( testSigma, sampModelSigma,
-                              arePValuesPlotted, plotTitle ){
+  PlotCorrCheck <- function( obsCorr, repL_Omega, arePValuesPlotted, plotTitle ){
 
-    Internal1 <- function(testSigma, sampModelSigma) {
-      X <- cov2cor(testSigma)
-      Y <- cov2cor(apply(sampModelSigma, c(2,3), median))
-      Z <- X
+    Internal1 <- function(obsCorr, repCorr) {
+      Y <- apply(repCorr, c(2,3), median)
+      Z <- obsCorr
       Z[lower.tri(Z)] <- Y[lower.tri(Y)]
       Z <- reshape2::melt(Z)
       w <- ggplot2::ggplot(Z, ggplot2::aes(Var2, Var1))+
@@ -1278,23 +1453,16 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
       return(w)
     }
 
-    Internal2 <- function(testSigma, sampModelSigma) {
-      testCor <- cov2cor(testSigma)
+    Internal2 <- function(obsCorr, repCorr) {
 
-      theDimensions <- dim(sampModelSigma)
+      theDimensions <- dim(repCorr)
       nMcSamples <- theDimensions[1]
       M <- theDimensions[2]
-
-      sampModelCor <- array(NA_real_, dim=theDimensions)
-      for(i in 1:nMcSamples) {
-        sampModelCor[i, , ] <- cov2cor(sampModelSigma[i, , ])
-      }
-
 
       pValues <- matrix(NA_real_, nrow = M, ncol = M )
       for(i in 1:(M-1)) {
         for(j in (i+1):M) {
-          tmp <- sum(sampModelCor[ , i, j ] > testCor[i,j]) / nMcSamples
+          tmp <- sum(repCorr[ , i, j ] > obsCorr[i,j]) / nMcSamples
           pValues[i,j] <- ifelse(tmp <= 0.5, tmp, 1-tmp)
         }
       }
@@ -1316,14 +1484,20 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
 
     }
 
-    x <- Internal1(testSigma, sampModelSigma)
+    repCorr <- array(NA_real_, dim=dim(repL_Omega) )
+    nMcSamples <- dim(repL_Omega)[1]
+    for(i in 1:nMcSamples) {
+      repCorr[i, , ] <- repL_Omega[i, , ] %*% t(repL_Omega[i, , ])
+    }
 
-    w <- Internal2(testSigma, sampModelSigma)
+    p1 <- Internal1(obsCorr, repCorr)
+
+    p2 <- Internal2(obsCorr, repCorr)
 
     grid::grid.newpage()
     grid::pushViewport(grid::viewport(layout=grid::grid.layout(1,2)))
-    print(x, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
-    print(w, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
+    print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
+    print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
 
   }
 
@@ -1333,13 +1507,13 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
                     intervalPercentage, arePValuesPlotted,
                     plotTitle = "Mean for pdf 1")
   } else if(pdf == 1 && testQuantity == "sd") {
-    PlotModelCheck( sqrt(diag(obsTestQuantities$Sigma1)),
-                    ExtractSd(rstan::extract(combinedChains, pars="Sigma1")$Sigma1),
+    PlotModelCheck( obsTestQuantities$tau1,
+                    rstan::extract(combinedChains, pars="tau1")$tau1,
                     intervalPercentage, arePValuesPlotted,
                     plotTitle = "Sd for pdf 1")
-  } else if(pdf == 1 && testQuantity == "cor") {
-    PlotCorCheck( obsTestQuantities$Sigma1,
-                  rstan::extract(combinedChains, pars="Sigma1")$Sigma1,
+  } else if(pdf == 1 && testQuantity == "corr") {
+    PlotCorrCheck( obsTestQuantities$Corr1,
+                  rstan::extract(combinedChains, pars="L_Omega1")$L_Omega1,
                   arePValuesPlotted,
                   plotTitle = "Correlation for pdf 1")
   } else if(pdf == 2 && testQuantity == "mean") {
@@ -1348,19 +1522,19 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
                     intervalPercentage, arePValuesPlotted,
                     plotTitle = "Mean for pdf 2")
   } else if(pdf == 2 && testQuantity == "sd") {
-    PlotModelCheck( sqrt(diag(obsTestQuantities$Sigma2)),
-                    ExtractSd(rstan::extract(combinedChains, pars="Sigma2")$Sigma2),
+    PlotModelCheck( obsTestQuantities$tau2,
+                    rstan::extract(combinedChains, pars="tau2")$tau2,
                     intervalPercentage, arePValuesPlotted,
                     plotTitle = "Sd for pdf 2")
-  } else if(pdf == 2 && testQuantity == "cor") {
-    PlotCorCheck( obsTestQuantities$Sigma2,
-                  rstan::extract(combinedChains, pars="Sigma2")$Sigma2,
+  } else if(pdf == 2 && testQuantity == "corr") {
+    PlotCorrCheck( obsTestQuantities$Corr2,
+                  rstan::extract(combinedChains, pars="L_Omega2")$L_Omega2,
                   arePValuesPlotted,
-                  plotTitle = "Correlation for pdf 1")
+                  plotTitle = "Correlation for pdf 2")
   } else {
     msg <- paste( "Argument pdf must be 1 or 2, ",
                   "and argument testQuantity must be ",
-                  "mean, sd, or cor.", sep="")
+                  "mean, sd, or corr.", sep="")
     stop(msg)
   }
 
@@ -1370,8 +1544,7 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
 #' @title Back transform to the simplex
 #'
 #' @description Back transform the mean vectors and covariance matrices
-#' of the finite mixture model
-#' to the correpsonding quantities for simplex
+#' of the finite mixture model to the correpsonding quantities for the simplex
 #' (that is, compostional means and variation matrices).
 #'
 #' @param gcData   SpatialPointsDataFrame storing the geochemical
@@ -1381,19 +1554,17 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
 #' @param nPCS          Number of principal components that were used in the
 #'                      finite mixture model.
 #'
-#' @param transData     List containing the transformed geochemical
+#' @param transData
+#' List containing the transformed geochemical
 #' concentrations and related information.
-#' This list is return by function \code{\link{transformGcData}}; the
-#' documentation for function transformGcData includes a complete
+#' This list is return by function \code{\link{transformGcData}}, for which the
+#' documentation includes a complete
 #' description of container \code{transData}.
-#' @param combinedChains List in which each element contains the
-#' Monte Carlo samples of a parameter from the finite mixture model.
-#' This list is return by function \code{\link{combineChains}}; the
-#'                        documentation for function combineChains includes a
-#'                        complete description of container
-#'                        \code{combinedChains}.
-#'
-#'
+#' @param combinedChains
+#' A \code{stanfit} object containg multiple Monte Carlo chains. This
+#' object is return by function \code{\link{combineChains}}, for which the
+#' documentation includes a complete description of container
+#' \code{combinedChains}.
 #'
 #' @return A list with the following components is returned.
 #' @return \item{compMean1}{Matrix containing Monte Carlo
@@ -1411,14 +1582,6 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
 #' the variation matrix.}
 #' @return \item{varMatrix2}{Array containing samples of the variation matrix
 #' for pdf 2. Its structure is identical to that for \code{varMatrix1}.}
-#' @return \item{theta}{Vector containing samples of the proportion
-#' associated with pdf 1 that is within the finite mixture model.}
-#' @return \item{g}{Matrix containing Monte Carlo samples of the
-#' conditional probabilites that the field samples are associated with pdf 1.
-#' The first dimension of the matrix
-#' pertains to indices of the Monte Carlo samples;
-#' the second dimension pertains to
-#' indices of the field samples. }
 #'
 #' @references
 #' Hron, K., Filzmoser, P. (2015) Exploring Compositional Data with the Robust
@@ -1442,10 +1605,12 @@ backTransform <- function(gcData, kappa, nPCs,
 
   elementNames <- names(gcData)
 
-  nMcSamples <- nrow(combinedChains$mu1)
-
   # dimension within the simplex
   D <- length(elementNames)
+
+  theSamples <- rstan::extract(combinedChains)
+
+  nMcSamples <- length(theSamples$theta)
 
   # subset now, so that it won't be done repeatedly
   rEV <- transData$robustEigenvectors[,1:nPCs]
@@ -1455,28 +1620,34 @@ backTransform <- function(gcData, kappa, nPCs,
   # with the principal component transformation
   tmp.center <- rep.int( 1, nMcSamples ) %o% transData$robustIlrCenter
 
-  mu1.tmp <- combinedChains$mu1 %*%  rEVt + tmp.center
-  mu2.tmp <- combinedChains$mu2 %*%  rEVt + tmp.center
+  mu1.tmp <- theSamples$mu1 %*%  rEVt + tmp.center
+  mu2.tmp <- theSamples$mu2 %*%  rEVt + tmp.center
 
   # Back-transformation to concentrations
-  compMean1 <- CoDA::CalcInvIlr( mu1.tmp, t(transData$Psi), kappa=kappa )
-  compMean2 <- CoDA::CalcInvIlr( mu2.tmp, t(transData$Psi), kappa=kappa )
+  compMean1 <- CoDA::CalcInvIlr( mu1.tmp, t(transData$Psi), kappa = kappa )
+  compMean2 <- CoDA::CalcInvIlr( mu2.tmp, t(transData$Psi), kappa = kappa )
 
   colnames(compMean1) <- elementNames
   colnames(compMean2) <- elementNames
 
-  varMatrix1 <- array( NA_real_, dim=c(nMcSamples,D,D),
-                       dimnames = list(NULL,elementNames,elementNames))
+  varMatrix1 <- array( NA_real_, dim=c(nMcSamples, D, D),
+                       dimnames = list(NULL, elementNames, elementNames))
   varMatrix2 <- varMatrix1
 
   for(i in 1:nMcSamples) {
 
     # undo the rotation, which is associated
     # with the principal component transformation
-    Sigma1.tmp <- rEV %*% combinedChains$Sigma1[i, , ] %*% rEVt
-    Sigma2.tmp <- rEV %*% combinedChains$Sigma2[i, , ] %*% rEVt
 
-    # Back-transformation to concentrations/simplex
+    L_Sigma1 <- theSamples$tau1[i, ] * theSamples$L_Omega1[i, , ]
+    Sigma1 <- L_Sigma1 %*% t(L_Sigma1)
+    Sigma1.tmp <- rEV %*% Sigma1 %*% rEVt
+
+    L_Sigma2 <- theSamples$tau2[i, ] * theSamples$L_Omega2[i, , ]
+    Sigma2 <- L_Sigma2 %*% t(L_Sigma2)
+    Sigma2.tmp <- rEV %*% Sigma2 %*% rEVt
+
+    # Back-transformation to concentrations within the simplex
     varMatrix1[i, , ] <- CoDA::InvCovTransform( Sigma1.tmp, transData$Psi )
     varMatrix2[i, , ] <- CoDA::InvCovTransform( Sigma2.tmp, transData$Psi )
   }
@@ -1484,9 +1655,7 @@ backTransform <- function(gcData, kappa, nPCs,
   return( list( compMean1 = compMean1,
                 compMean2 = compMean2,
                 varMatrix1 = varMatrix1,
-                varMatrix2 = varMatrix2,
-                theta = combinedChains$theta,
-                g = combinedChains$g ))
+                varMatrix2 = varMatrix2))
 
 }
 
@@ -1501,22 +1670,21 @@ backTransform <- function(gcData, kappa, nPCs,
 #' @param kappa    Constant-sum value for the geochemical concentrations.
 #'                 Typically \code{kappa} equals 1,000,000.
 #' @param simplexModPar
-#' List containing Monte Carlo samples of the parameters in the finite mixture
-#' model.
-#' These parameters are expressed in terms of their equivalent values in the
-#' simplex.
-#' This list is return by function \code{\link{backTranform}}; the
-#'                        documentation for function backTranform includes a
-#'                        complete description of container
-#'                        \code{simplexModPar}.
+#' List containing Monte Carlo samples of the selected parameters
+#' in the finite mixture model.
+#' These parameters (namely, the mean vector and covariance matrix for
+#' each pdf) are expressed in terms of their equivalent values in the
+#' simplex (namely, the compositional mean vector and the variation matrix
+#' for each pdf).
+#' This list is return by function \code{\link{backTranform}}, for which the
+#' documentation includes a complete description of this container.
+#' \code{simplexModPar}.
+#'
 #' @param elementOrder Vector specifying the order in which the elements are
 #' plotted.
 #' @param intervalPercentage Interval for the distributions of the standardized
 #' compositional means. Typical values are 50, 90, or 95.
 #' @param symbolSize The size of the plotting symbol.
-#'
-#' @details
-#' ???
 #'
 #' @references
 #' Pawlowsky-Glahn, V., Egozcue, J.J., and Tolosana-Delgado, R., 2015, Modeling
@@ -1592,17 +1760,18 @@ plotStdCompMeans <- function(simplexStats, kappa, simplexModPar, elementOrder,
 #' finite mixture model.
 #'
 #' @param simplexModPar
-#' List containing Monte Carlo samples of the parameters in the finite mixture
-#' model.
-#' These parameters are expressed in terms of their equivalent values in the
-#' simplex.
-#' This list is return by function \code{\link{backTranform}}; the
-#'                        documentation for function backTranform includes a
-#'                        complete description of container
-#'                        \code{simplexModPar}.
-#' @param elementOrder Vector specifying the order in which the elements are
-#' plotted.
-#' @param symbolSize The size of the plotting symbol.
+#' List containing Monte Carlo samples of the selected parameters
+#' in the finite mixture model.
+#' These parameters (namely, the mean vector and covariance matrix for
+#' each pdf) are expressed in terms of their equivalent values in the
+#' simplex (namely, the compositional mean vector and the variation matrix
+#' for each pdf).
+#' This list is return by function \code{\link{backTranform}}, for which the
+#' documentation includes a complete description of this container.
+#' @param elementOrder
+#' Vector specifying the order in which the elements are plotted.
+#' @param symbolSize
+#' The size of the plotting symbol.
 #'
 #' @details
 #' The plot does not include intervals from the distributions of the
@@ -1657,17 +1826,18 @@ plotCompMeans <- function(simplexModPar, elementOrder, symbolSize = 2) {
 #' in a single plot.
 #'
 #' @param simplexModPar
-#' List containing Monte Carlo samples of the parameters in the finite mixture
-#' model.
-#' These parameters are expressed in terms of their equivalent values in the
-#' simplex.
-#' This list is return by function \code{\link{backTranform}}; the
-#'                        documentation for function backTranform includes a
-#'                        complete description of container
-#'                        \code{simplexModPar}.
-#' @param elementOrder Vector specifying the order in which the elements are
-#' plotted.
-#' @param colorScale    Character string specifying the color scale for
+#' List containing Monte Carlo samples of the selected parameters
+#' in the finite mixture model.
+#' These parameters (namely, the mean vector and covariance matrix for
+#' each pdf) are expressed in terms of their equivalent values in the
+#' simplex (namely, the compositional mean vector and the variation matrix
+#' for each pdf).
+#' This list is return by function \code{\link{backTranform}}, for which the
+#' documentation includes a complete description of this container.
+#' @param elementOrder
+#' Vector specifying the order in which the elements are plotted.
+#' @param colorScale
+#' Character string specifying the color scale for
 #' the plot. The choices are either "spectrum" (default) and "rainbow."
 #'
 #' @details
@@ -1688,11 +1858,11 @@ plotCompMeans <- function(simplexModPar, elementOrder, symbolSize = 2) {
 #'
 #' @examples
 #' \dontrun{
-#' plotSqrtVarMatrix( simplexModPar, elementOrder, colorScale = "rainbow" )
+#' plotSqrtVarMatrix(simplexModPar, elementOrder, colorScale = "rainbow")
 #' }
 #'
 #' @export
-plotSqrtVarMatrices <- function( simplexModPar, elementOrder,
+plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
                                 colorScale = "spectrum" ) {
 
   D <- dim(simplexModPar$varMatrix1)[3]  # D is the standard notation, and is concise.
@@ -1752,34 +1922,36 @@ plotSqrtVarMatrices <- function( simplexModPar, elementOrder,
 #' the pdfs in the finite mixture model. That is, the attributes indicate the
 #' cluster to which the field sample belongs.
 #'
-#' @param concData   SpatialPointsDataFrame storing the geochemical
-#'                 concentrations and locations of each field sample
-#' @param simplexModPar
-#' List containing Monte Carlo samples of the parameters in the finite mixture
-#' model.
-#' These parameters are expressed in terms of their equivalent values in the
-#' simplex.
-#' This list is return by function \code{\link{backTranform}}; the
-#'                        documentation for function backTranform includes a
-#'                        complete description of container
-#'                        \code{simplexModPar}.
+#' @param concData
+#' SpatialPointsDataFrame storing the geochemical
+#' concentrations and locations of each field sample.
+#'
+#' @param condProbs1
+#' A matrix containing the Monte Carlo samples of the
+#' conditional probabilites. This matrix is returned by function
+#' \code{\link{calcCondProbs}}, for which the documentation includes a
+#' complete descriptoin of container \code{condProbs1}.
+#'
 #' @param probIntervals Vector containing intervals of conditional
 #' probability. All field samples within an given interval are plotted the same
 #' way.
+#'
 #' @param symbolIndices Vector containing the indices of the plotting symbols
 #' for the conditional probability intervals.
+#'
 #' @param symbolSizes Vector containing the relative sizes of the plotting symbols
 #' for the conditional probability intervals.
+#'
 #' @param symbolColors Vector containing the colors of the plotting symbols
 #' for the conditional probability intervals.
 #'
 #' @details
-#' A field sample is assigned plotting attributes based upon the
-#' median of the conditional probabilities, which are
-#' calculated during the Monte Carlo sampling of the posterior pdf. These
-#' conditional probabilities, and hence their median, indicate the extend
-#' to which the field sample is associated with the first pdf in the finite
-#' mixture model.
+#' The conditional probabilities indicate the extend
+#' to which the field samples are associated with the first pdf in the finite
+#' mixture model. The conditional probabilities
+#' in container \code{condProbs1} are Monte Carlo samples,
+#' and their medians are used to assign plotting attributes for the field
+#' samples.
 #'
 #' The plotting attributes are specified by arguments \code{probIntervals},
 #' \code{symbolIndices}, \code{symbolSizes}, and \code{symbolColors}. To
@@ -1814,11 +1986,11 @@ plotSqrtVarMatrices <- function( simplexModPar, elementOrder,
 #' @examples
 #' \dontrun{
 #' map('state', fill = TRUE, col = "gray60", border = "white")
-#' plotSqrtVarMatrix( simplexModPar, elementOrder, colorScale = "rainbow" )
+#' plotClusters(concentrationData, condProbs1)
 #' }
 #'
 #' @export
-plotClusters <- function(concData, simplexModPar,
+plotClusters <- function(concData, condProbs1,
                         probIntervals = c( 0, 0.1, 0.9, 1.0 ),
                         symbolIndices = c( 16, 16, 16 ),
                         symbolSizes = c( 1/3, 1/2, 1/3 ),
@@ -1827,11 +1999,11 @@ plotClusters <- function(concData, simplexModPar,
   locations <- coordinates( concData )
 
   # median of conditional probabilites
-  g_median <- apply(simplexModPar$g, 2, median)
+  g <- apply(condProbs1, 2, median)
 
   for (i in 1:(length(probIntervals)-1)) {
 
-    areInInterval <- probIntervals[i] <= g_median & g_median <= probIntervals[i+1]
+    areInInterval <- probIntervals[i] <= g & g <= probIntervals[i+1]
 
     if( sum(areInInterval) == 0 ) next
 
@@ -1851,8 +2023,7 @@ plotClusters <- function(concData, simplexModPar,
 #'
 #' @param concentrationData
 #' SpatialPointsDataFrame storing the geochemical
-#' concentrations and locations of each field sample. These data have been
-#' clustered.
+#' concentrations and locations of each field sample.
 #'
 #' @param censorIndicators
 #' Matrix specifying which samples in \code{concentrationData} are
@@ -1860,14 +2031,13 @@ plotClusters <- function(concData, simplexModPar,
 #' element,
 #' and each row pertains to a field sample. Matrix elements may be "no",
 #' "left", or "right", indicating that the concentration is "not censored",
-#'  is "left-censored", or is "right-censored".
+#'  "left-censored", or "right-censored".
 #'
-#' @param simplexModPar
-#' List containing Monte Carlo samples of the parameters in the finite mixture
-#' model. These parameters are expressed in terms of their equivalent values in the
-#' simplex. This list is return by function \code{\link{backTranform}}; the
-#' documentation for function backTranform includes a
-#' complete description of container \code{simplexModPar}.
+#' @param condProbs1
+#' A matrix containing the Monte Carlo samples of the
+#' conditional probabilites. This matrix is returned by function
+#' \code{\link{calcCondProbs}}, for which the documentation includes a
+#' complete descriptoin of container \code{condProbs1}.
 #'
 #' @param threshold
 #' The threshold used to split the data into two groups. (See details.)
@@ -1900,20 +2070,20 @@ plotClusters <- function(concData, simplexModPar,
 #' @examples
 #' \dontrun{
 #' tmp <- splitData(concentrationData, censorIndicators,
-#'                  simplexModPar, threshold = 0.10 )
+#'                  condProb1, threshold = 0.10 )
 #' }
 #'
 #' @export
 splitData <- function(concentrationData, censorIndicators,
-                      simplexModPar, threshold = 0.10 ) {
+                      condProbs1, threshold = 0.10 ) {
 
   if(threshold <= 0.0 || 0.5 <= threshold)
     stop("Argument threshold must be > 0 and < 0.50.")
 
-  g_median <- apply(simplexModPar$g, 2, median)
+  g <- apply(condProbs1, 2, median)
 
-  areInPdf1 <- 1.0-threshold <= g_median & g_median <= 1.0
-  areInPdf2 <- 0.0 <= g_median & g_median <= threshold
+  areInPdf1 <- 1.0-threshold <= g & g <= 1.0
+  areInPdf2 <- 0.0 <= g & g <= threshold
 
   return(list(
     concentrationData1 = concentrationData[areInPdf1, ],
@@ -1923,476 +2093,3 @@ splitData <- function(concentrationData, censorIndicators,
 }
 
 
-# #' @title Plot autocorrelation functions
-# #'
-# #' @description Plot autocorrelation functions for selected traces
-# #' from each chain.
-# #'
-# #' @param fmmSamples
-# #' List containing samples of the posterior pdf and
-# #' related information. This list is return by function
-# #' \code{\link{sampleFmm}}; the documentation for function sampleFmm includes
-# #' a complete description of container \code{fmmSamples}.
-# #'
-# #' @details
-# #' Autocorrelation functions are plotted for the following model parameters:
-# #' \itemize{
-# #'  \item Element [1] of the mean vector for pdf 1 (mu1[1]).
-# #'  \item Element [1,1] of the covariance matrix for pdf 1 (Sigma1[1,1]).
-# #'  \item Model proportion associated with pdf 1 (theta)
-# #' }
-# #'
-# #' @examples
-# #' \dontrun{
-# #' plotAcfs(fmmSamples)
-# #' }
-# #'
-# #' @export
-# plotAcfs <- function(fmmSamples) {
-#
-#   selectedTraces <- fmmSamples$stanSelectedTraces
-#
-#   N <- length(selectedTraces)
-#
-#   origPar <- par( mfrow=c(3,1))
-#   on.exit(par(origPar), add=TRUE)
-#
-#   for(i in 1:N){
-#     devAskNewPage( ask = TRUE )
-#
-#     acf(selectedTraces[[i]][, "mu1[1]"], main="mu1[1]")
-#
-#     acf(selectedTraces[[i]][, "Sigma1[1,1]"], main="Sigma1[1,1]")
-#
-#     acf(selectedTraces[[i]][, "theta"], main="theta")
-#
-#     title(main=paste("Chain", i), outer=TRUE, line=-1)
-#
-#     devAskNewPage( ask = options()$device.ask.default )
-#
-#   }
-# }
-
-# #' @title Check combined chains
-# #'
-# #' @description Check that the chains have been properly combined.
-# #'
-# #' @param combinedChains List in which each element contains the
-# #' Monte Carlo samples of a parameter from the finite mixture model.
-# #' This list is return by function \code{\link{combineChains}}; the
-# #'                        documentation for function combineChains includes a
-# #'                        complete description of container
-# #'                        \code{combinedChains}.
-# #'
-# #' @details
-# #' Histograms are shown for five model parameters:
-# #' (1) The first element of the mean vector for pdf 1, which is
-# #' designated "mu1[1]."
-# #' (2) The first element of the mean vector for pdf 2, which is
-# #' designated "mu2[1]."
-# #' (3) The first element of the covariance matrix for pdf 1, which is
-# #' designated "Sigma1[1,1]."
-# #' (4) The first element of the covariance matrix for pdf 2, which is
-# #' designated "Sigma2[1,1]."
-# #' (5) The proportion in the finite mixture model associated with pdf 1,
-# #' which is designated "theta."
-# #'
-# #' If the histograms show a bimodal distribution, then it is likely that
-# #' the chains were improperly combined.
-# #'
-# #' @examples
-# #' \dontrun{
-# #' checkCombinedChains(combinedChains)
-# #' }
-# #'
-# #' @export
-#
-# checkCombinedChains <- function(combinedChains) {
-#
-#   devAskNewPage( ask = TRUE )
-#
-#   origPar <- par(mfrow=c(1,2))
-#   hist(combinedChains$mu1[,1], freq=FALSE,
-#        col = "gray", border = "white",
-#        xlab = "mu1[1]", main = "Pdf 1")
-#   hist(combinedChains$mu2[,1], freq=FALSE,
-#        col = "gray", border = "white",
-#        xlab = "mu2[1]", main = "Pdf 2")
-#   par(origPar)
-#
-#   origPar <- par(mfrow=c(1,2))
-#   hist(combinedChains$Sigma1[,1,1], freq=FALSE,
-#        col = "gray", border = "white",
-#        xlab = "Sigma1[1,1]", main = "Pdf1")
-#   hist(combinedChains$Sigma2[,1,1], freq=FALSE,
-#        col = "gray", border = "white",
-#        xlab = "Sigma2[1,1]", main = "Pdf 2")
-#   par(origPar)
-#
-#   hist(combinedChains$theta, freq=FALSE,
-#        col = "gray", border = "white",
-#        xlab = "theta", main = "")
-#
-#   devAskNewPage( ask = options()$device.ask.default )
-#
-# }
-#
-# # chains a matrix of chains
-# # each column is a separate chain.
-# #
-# # the returned value is a list with two elements,
-# # the potential scale reduction (rHat) and the number of
-# # effective samples (nEff)
-# #
-# # At first glance it may seem that the calculation of these
-# # two measures should be in separate functions. However,
-# # the calculation of nEff requires intermediate results from
-# # the calucation of rHat.
-# CalcMeasures <- function ( chains ) {
-#
-#   ##
-#   ## Estimate the potential scale reduction
-#   ##
-#
-#   # The variables are documented on p. 284-285 of Gelman et al. (3rd ed.)
-#   m <- ncol( chains )
-#   n <- nrow( chains )
-#   theColMeans <- colMeans( chains )         # psiBar,j
-#   theGlobalMean <- mean( theColMeans )      # psiBar..
-#
-#   # between sequence variance
-#   B <- n / ( m - 1 ) * sum( (theColMeans-theGlobalMean)^2 )
-#
-#   s2 <- vector( mode="numeric", length=m )
-#   for( j in 1:m ) {
-#     s2[j] <- var(chains[,j])
-#   }
-#
-#   # within sequence variance
-#   W <- mean( s2 )
-#
-#   # marginal posterior variance, eqn. 11.3
-#   V <- ( n - 1 ) / n * W + 1 / n * B
-#
-#   # potential scale reduction, eqn. 11.4
-#   rHat <- sqrt( V / W )
-#
-#   # edition 2 of Gelman et al., p. 298
-#   # effective number of independent draws, eqn. 11.4
-#   # nEff <- min( floor( m * n * V / B ), m * n )
-#
-#   ##
-#   ## Estimate the effective sample size
-#   ##
-#
-#   # See edition 3 of Gelman et al. p. 286-287
-#
-#   # unnumbered eqn just above eqn 11.7
-#   Vt <- vector(mode = "numeric", length = n)
-#   Vt[1] <- 0.0
-#   for(t in 2:n) {
-#     Vt[t] <- sum( colSums( diff(chains, lag = (t-1))^2 ) )  / (m*(n-(t-1)))
-#   }
-#
-#   # eqn 11.7
-#   rho_t <- 1 - Vt / ( 2 * V)
-#
-#   #   # This following method of calculating the mean correlation coefficient
-#   #   # differs from that on page 286, but the results are almost identical.
-#   #   a <- acf(chains, plot=FALSE)
-#   #   nLags <- dim(a$acf)[1]
-#   #   rho_t <- vector(mode="numeric", length=nLags)
-#   #   for(i in 1:nLags) {
-#   #     partialSum <- 0.0
-#   #     for(j in 1:m) {
-#   #       partialSum <- partialSum + a$acf[i,j,j]
-#   #     }
-#   #     rho_t[i] <- partialSum / m
-#   #   }
-#
-#
-#   # One stopping criterion is in Gelman et al., p. 286-287. It is defined by
-#   # the condition:
-#   #           if( rho_t[t] + rho_t[t+1] < 0.0 ) break
-#   #
-#   # Another, slightly different, stopping criterion is presented in the
-#   # rstan manual in the subsection "Estimation of effective sample size",
-#   # section number 54.4, in Stan Modeling Language - User's Guide and
-#   # Reference Manual, Stan version 2.6.0. It is defined by
-#   # the condition:
-#   #           if( rho_t[t] < 0.0 ) break
-#   #
-#   # The index starts at 2, which corresponds to a lag of 1.
-#   sum_rho_t <- 0.0
-#   for(t in 2:n) {
-#     # if( rho_t[t] + rho_t[t+1] < 0.0 ) break
-#     if( rho_t[t] < 0.0 ) break
-#     sum_rho_t <- sum_rho_t + rho_t[t]
-#   }
-#
-#   # eqn. 11.8, p. 287
-#   nEff <- as.integer( m * n / ( 1 + 2 * sum_rho_t ) )
-#
-#   return( c(rHat=rHat, nEff=nEff ) )
-# }
-#
-# # split the chains are described by Gelman, p. 284
-# #
-# # combinedChains is a vector: the first "nSamplesPerChain" samples are
-# # from the first chain, the second "nSamplesPerChain" samples are from the
-# # second chain, and so on
-# SplitChains <- function( combinedChains, nSamplesPerChain ) {
-#   X <- matrix(combinedChains, nrow = nSamplesPerChain)
-#
-#   nNewRows <- as.integer( nSamplesPerChain / 2 )
-#   a <- X[1:nNewRows, ]
-#   b <- X[(1:nNewRows)+nNewRows, ]
-#   return(cbind(a, b))
-# }
-#
-#
-# #' @title Calculate convergence measures of the Monte Carlo chains
-# #'
-# #' @description Calculate the potential scale reduction and the effective
-# #' number of simulations draws for each model parameter in the finite
-# #' mixture model.
-# #'
-# #' @param combinedChains     List in which each element contains the
-# #' Monte Carlo samples of a parameter from the finite mixture model.
-# #' This list is return by function \code{\link{combineChains}}; the
-# #'                        documentation for function combineChains includes a
-# #'                        complete description of container
-# #'                        \code{combinedChains}.
-# #' @param fmmSamples       List, which includes the Monte Carlo chains and
-# #'                        other data, returned by function
-# #'                        \code{\link{sampleFmm}}; the
-# #'                        documentation for fmmSample includes a complete
-# #'                        description of fmmSamples.
-# #'
-# #' @details
-# #' ???
-# #'
-# #' @return A list containing these 7 elements.
-# #' \tabular{lrr}{
-# #' Element name \tab Role in finite mixture model \tab Structure of rHat and nEff \cr
-# #' theta \tab Proportion associated with \tab scalar \cr
-# #' mu1 \tab Mean vector for pdf 1 \tab vector of length N \cr
-# #' mu2 \tab Mean vector for pdf 2 \tab vector of length N \cr
-# #' tau1 \tab Vector of standard deviations for pdf 1 \tab vector of length N \cr
-# #' tau2 \tab Vector of standard deviations for pdf 2 \tab vector of length N \cr
-# #' Corr1 \tab Matrix of correlations for pdf 1 \tab Matrix of size NxN. \cr
-# #' Corr2 \tab Matrix of correlations for pdf 2 \tab Matrix of size NxN.
-# #' }
-# #' Each of the seven elements comprise another
-# #' list with two elements. The first element pertains to
-# #' the potential scale reduction (rHat), and the second element pertains to the
-# #' number of effective samples (nEff). The structures of these two elements
-# #' are identical and depend
-# #' on the variable to which they pertain. The dimension of the two pdfs
-# #' in the finite mixture model is designated as N.
-# #'
-# #' Potential scale reduction and the number of effective samples are
-# #' described by Gelman et al. (2014, p. 284-287).
-# #'
-# #' @references
-# #' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B., Vehtari, A.,
-# #' and Rubin, D.B., 2014, Bayesian data analysis (3rd ed.),
-# #' CRC Press.
-# #'
-# #' @examples
-# #' \dontrun{
-# #' convergenceMeasures <- calcConvMeasures(combinedChains, fmmSamples)
-# #' }
-# #'
-# #' @export
-# calcConvMeasures <- function(combinedChains, fmmSamples) {
-#
-#   Internal1 <- function(x, N, nSamplesPerChain) {
-#     rHat <- vector(mode = "numeric", length = N)
-#     nEff <- vector(mode = "numeric", length = N)
-#     for(i in 1:N) {
-#       tmp <- CalcMeasures( SplitChains(x[, i], nSamplesPerChain) )
-#       rHat[i] <- tmp["rHat"]
-#       nEff[i] <- tmp["nEff"]
-#     }
-#     return(list(rHat = rHat, nEff = nEff))
-#   }
-#
-#   Internal2 <- function(X, N, nSamplesPerChain) {
-#     rHat <- matrix(NA_real_, nrow = N, ncol = N)
-#     nEff <- matrix(NA_real_, nrow = N, ncol = N)
-#     for(i in 1:(N-1)) {
-#       for(j in (i+1):N) {
-#         tmp <- CalcMeasures( SplitChains(X[, i, j], nSamplesPerChain) )
-#         rHat[i,j] <- tmp["rHat"]
-#         nEff[i,j] <- tmp["nEff"]
-#         rHat[j,i] <- rHat[i,j]
-#         nEff[j,i] <- nEff[i,j]
-#       }
-#     }
-#     return(list(rHat = rHat, nEff = nEff))
-#   }
-#
-#   Internal3 <- function(X) {
-#     Y <- array( NA_real_, dim = dim(X) )
-#     nSamples <- dim(X)[1]
-#     for(i in 1:nSamples) {
-#       Y[i, , ] <- cov2cor(X[i, ,])
-#     }
-#     return(Y)
-#   }
-#
-#   Internal4 <- function(X) {
-#     tmp <- dim(X)
-#     Y <- matrix(NA_real_, nrow = tmp[1], ncol = tmp[2])
-#     for(i in 1:tmp[2]) {
-#       Y[, i] <- sqrt(X[, i, i])
-#     }
-#     return(Y)
-#   }
-#
-#   nSamplesPerChain <- fmmSamples$samplingParams$nSamplesPerChain
-#   N <- ncol(combinedChains$mu1)  # N is also the number of principal components
-#
-#   measures <- vector(mode = "list")
-#
-#   tmp <- CalcMeasures( SplitChains(combinedChains$theta, nSamplesPerChain) )
-#   measures$theta <- list(rHat = unname(tmp["rHat"]), nEff = unname(tmp["nEff"]))
-#
-#   measures$mu1 <- Internal1(combinedChains$mu1, N, nSamplesPerChain)
-#   measures$mu2 <- Internal1(combinedChains$mu2, N, nSamplesPerChain)
-#
-#   measures$tau1 <- Internal1(Internal4(combinedChains$Sigma1), N, nSamplesPerChain)
-#   measures$tau2 <- Internal1(Internal4(combinedChains$Sigma2), N, nSamplesPerChain)
-#   measures$Corr1 <- Internal2(Internal3(combinedChains$Sigma1), N, nSamplesPerChain)
-#   measures$Corr2 <- Internal2(Internal3(combinedChains$Sigma2), N, nSamplesPerChain)
-#
-#   return( measures )
-#
-# }
-#
-# #' @title Plot convergence measures
-# #'
-# #' @description Plot the potential scale reduction and the number of
-# #' effective samples for each parameter in the finite mixture model.
-# #'
-# #' @param convMeasures List containing the potential scale reductions and
-# #' numbers of effective samples for every model parameter. This list is
-# #' returned by function \code{\link{calcConvMeasures}}; the documentation
-# #' for function calcConvMeasures includes a complete description of
-# #' container \code{convMeasures}.
-# #'
-# #' @param combinedChains List in which each element contains the
-# #' Monte Carlo samples of a parameter from the finite mixture model.
-# #' This list is return by function \code{\link{combineChains}}; the
-# #'                        documentation for function combineChains includes a
-# #'                        complete description of container
-# #'                        \code{combinedChains}.
-# #'
-# #' @details
-# #' The potential scale reductions and
-# #' numbers of effective samples are displayed as bar charts and matrices,
-# #' depending upon the structure of the associated model parameters.
-# #'
-# #' When a bar chart shows potential scale reductions, there are two, horizontal
-# #' green lines, which approximately delimit an optimal range. When a bar chart
-# #' shows numbers of effective samples, there is one, horizontal line, which
-# #' is the maximum (optimal) number of effective samples.
-# #'
-# #' @examples
-# #' \dontrun{
-# #' plotConvMeasures(convMeasures, combinedChains)
-# #' }
-# #'
-# #' @export
-# plotConvMeasures <- function(convMeasures, combinedChains) {
-#
-#   # For vectors
-#   InternalPlot1 <- function(rHat, nEff, nSamples, paramName) {
-#
-#     df <- data.frame( component = 1:length(rHat),
-#                       rHat = rHat,
-#                       nEff = nEff )
-#     a <- ggplot2::ggplot( df,
-#                           ggplot2::aes(x = component, y = rHat),
-#                           environment = environment()) +
-#       ggplot2::geom_bar(stat = "identity") +
-#       ggplot2::geom_hline(ggplot2::aes(yintercept = 0.99), col="green") +
-#       ggplot2::geom_hline(ggplot2::aes(yintercept = 1.05), col="green") +
-#       ggplot2::xlab("Component") +
-#       ggplot2::ylab("Potential scale reduction (no units)") +
-#       ggplot2::ggtitle(paramName)
-#
-#     b <- ggplot2::ggplot( df,
-#                           ggplot2::aes(x = component, y = nEff),
-#                           environment = environment()) +
-#       ggplot2::geom_bar(stat = "identity") +
-#       ggplot2::geom_hline(ggplot2::aes(yintercept = nSamples), col="green") +
-#       ggplot2::xlab("Component") +
-#       ggplot2::ylab("Number of effective samples (no units)")+
-#       ggplot2::ggtitle(paramName)
-#
-#     grid::grid.newpage()
-#     grid::pushViewport(grid::viewport(layout=grid::grid.layout(2,1)))
-#     print(a, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
-#     print(b, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
-#
-#   }
-#
-#   # for matrices
-#   InternalPlot2 <- function(rHat, nEff, nSamples, paramName){
-#
-#     Z1 <- reshape2::melt(rHat)
-#     Z1 <- na.omit(Z1)
-#     p1 <- ggplot2::ggplot(Z1,
-#                           ggplot2::aes(Var2, Var1),
-#                           environment = environment())+
-#       ggplot2::geom_tile(data=Z1, ggplot2::aes(fill=value), color="white")+
-#       ggplot2::scale_fill_gradient2(low="blue", high="red", mid="white",
-#                                     midpoint=1,
-#                                     name="Potential\nscale\nreduction\n(no units)")+
-#       ggplot2::xlab("Component") +
-#       ggplot2::ylab("Component") +
-#       ggplot2::coord_equal() +
-#       ggplot2::ggtitle(paramName)
-#
-#     Z2 <- reshape2::melt(nEff)
-#     Z2 <- na.omit(Z2)
-#
-#     p2 <- ggplot2::ggplot(Z2,
-#                           ggplot2::aes(Var2, Var1),
-#                           environment = environment())+
-#       ggplot2::geom_tile(data=Z2, ggplot2::aes(fill=value), color="white")+
-#       ggplot2::scale_fill_gradient(limit=c(min(Z2$value),nSamples),
-#                                    high = "#132B43", low = "#56B1F7",
-#                                    name="Number\nof effective\nsamples\n(no units)")+
-#       ggplot2::xlab("Component") +
-#       ggplot2::ylab("Component") +
-#       ggplot2::coord_equal()
-#
-#     grid::grid.newpage()
-#     grid::pushViewport(grid::viewport(layout=grid::grid.layout(1,2)))
-#     print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
-#     print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
-#
-#   }
-#
-#
-#   nSamples <- length(combinedChains$theta)
-#
-#   devAskNewPage( ask = TRUE )
-#
-#   InternalPlot1(convMeasures$theta$rHat, convMeasures$theta$nEff, nSamples, "theta")
-#   InternalPlot1(convMeasures$mu1$rHat, convMeasures$mu1$nEff, nSamples, "mu1")
-#   InternalPlot1(convMeasures$mu2$rHat, convMeasures$mu2$nEff, nSamples, "mu2")
-#   InternalPlot1(convMeasures$tau1$rHat, convMeasures$tau1$nEff, nSamples, "tau1")
-#   InternalPlot1(convMeasures$tau2$rHat, convMeasures$tau2$nEff, nSamples, "tau2")
-#
-#   InternalPlot2(convMeasures$Corr1$rHat, convMeasures$Corr1$nEff, nSamples,
-#                 "Correlation matrix 1")
-#   InternalPlot2(convMeasures$Corr2$rHat, convMeasures$Corr2$nEff, nSamples,
-#                 "Correlation matrix 2")
-#
-#   devAskNewPage( ask = options()$device.ask.default )
-#
-# }
