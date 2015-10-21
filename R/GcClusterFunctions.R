@@ -668,7 +668,7 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 #' @export
 sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
                       nSamplesPerChain = 1000,
-                      nCpuCores = 4, nRepetitions = 2, procDir = NULL) {
+                      nCpuCores = 4, nRepetitions = 2, procDir = ".") {
 
   rstanParallelSampler <- function(stanData, nSamplesPerChain,
                                    rng_seed, nCpuCores, iRep, procDir ) {
