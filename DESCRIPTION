@@ -3,13 +3,11 @@ Type: Package
 Title: Cluster geochemical samples
 Version: 0.1
 Date: 2015-09-17
-Authors@R: person("Karl", "Ellefsen", email = "ellefsen@usgs.gov",
-  role = c("aut", "cre"))
+Authors@R: person("Karl", "Ellefsen", email = "ellefsen@usgs.gov", role = c("aut", "cre"))
 Description: Clusters field samples of geochemical data using a finite mixture model.
 License: CC0
 LazyData: TRUE
-Imports: CoDA,
-    colorspace,
+Imports: colorspace,
     ggplot2,
     grid,
     mclust,
@@ -19,3 +17,6 @@ Imports: CoDA,
     robustbase,
     rstan,
     sp
+Suggests: knitr,
+    rmarkdown
+VignetteBuilder: knitr

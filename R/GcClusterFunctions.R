@@ -34,9 +34,9 @@ calcSimplexStats <- function( gcData, kappa ) {
 
   concData <- as.matrix(gcData@data)
 
-  sampleCenter <- CoDA::CalcCompCenter( concData, kappa=kappa )
-  variationMatrix <- CoDA::CalcVariationMatrix( concData )
-  metricVariance <- CoDA::CalcTotalVariance( variationMatrix )
+  sampleCenter <- CalcCompCenter( concData, kappa=kappa )
+  variationMatrix <- CalcVariationMatrix( concData )
+  metricVariance <- CalcTotalVariance( variationMatrix )
 
   return( list(sampleCenter = sampleCenter,
                variationMatrix = variationMatrix,
@@ -111,8 +111,8 @@ transformGcData <- function(gcData, alpha = 0.98) {
 
   X <- as.matrix(gcData@data)
 
-  Psi <- CoDA::CalcPsiMatrix2( ncol(X) )
-  ilrCoefs <- CoDA::CalcIlrCoefs( X, t(Psi) )
+  Psi <- CalcPsiMatrix2( ncol(X) )
+  ilrCoefs <- CalcIlrCoefs( X, t(Psi) )
 
   mcdResult <- robustbase::covMcd( ilrCoefs, alpha=alpha )
 
@@ -573,7 +573,8 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 #' finite mixture model. The model implementation and the sampling are
 #' performed with package rstan.
 #'
-#' @param transData     List containing the transformed geochemical
+#' @param transData
+#' List containing the transformed geochemical
 #' concentrations and related information.
 #' This list is return by function \code{\link{transformGcData}}, for which the
 #' documentation includes a complete description of container \code{transData}.
@@ -582,9 +583,9 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 #' @param tauBounds     Vector of length 2, containing the lower and upper
 #'                      bounds for tau (See Details).
 #' @param nSamplesPerChain  Number of samples in each chain (See details).
+#' @param nChainsPerCore Number of chains that each core computes (See Details).
 #' @param nCpuCores     Number of central processing units (cpu's) that are
 #'                      used for one set of parallel computations (See Details).
-#' @param nRepetitions  Number of repetitions of parallel computations (See Details).
 #' @param procDir      Directory into which the results are written
 #'                      (See Details).
 #'
@@ -612,10 +613,9 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 #' \code{nCpuCores} must be less than or equal to the actual number. The
 #' parallel computations are organized in the following manner:
 #' \code{nCpuCores} cpu's
-#' are requested from the operating system; each cpu computes one chain
-#' are writes the result to a file in directory \code{procDir}. This process
-#' is repeated until the number of sets of parallel computation equals
-#' \code{nRepetitions}.
+#' are requested from the operating system; each cpu computes
+#' \code{nchainsPerCore} individual chains, and each chain is written
+#' to its own file in directory \code{procDir}.
 #'
 #' @return The returned values may be conveniently divided into two groups.
 #' First, the samples in a single chain are stored in \code{stanfit} object,
@@ -661,50 +661,61 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 #' @examples
 #' \dontrun{
 #' fmmSamples <- sampleFmm(transData, nPCs, tauBounds = c(0.001,20),
-#'                         nCpuCores = 7, nRepetitions = 4,
+#'                         nCpuCores = 7, nChainsPerCore = 5,
 #'                         procDir = "Process121")
 #' }
 #'
 #' @export
 sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
                       nSamplesPerChain = 1000,
-                      nCpuCores = 4, nRepetitions = 2, procDir = ".") {
+                      nChainsPerCore = 2,
+                      nCpuCores = parallel::detectCores(),
+                      procDir = ".") {
+
 
   rstanParallelSampler <- function(stanData, nSamplesPerChain,
-                                   rng_seed, nCpuCores, iRep, procDir ) {
+                                   nChainsPerCore, nCpuCores, procDir ) {
 
     CL <- parallel::makeCluster(nCpuCores)
 
     parallel::clusterExport(cl = CL,
-                            c("stanData", "nSamplesPerChain", "rng_seed",
-                              "iRep", "procDir"),
+                            c("stanData", "nSamplesPerChain",
+                              "nChainsPerCore", "procDir"),
                             envir=environment())
 
-    sflist <- parallel::parLapply(CL, 1:nCpuCores, fun = function(cid) {
+    fnlist <- parallel::parLapply(CL, 1:nCpuCores, fun = function(cid) {
 
       # Make rstan available to the processors. This function won't work
       # otherwise. So, I'm violating the principles in "R packages",
       # p. 34, 82-84
       require(rstan, quietly = TRUE)
 
-      rawSamples <- rstan::sampling(GcClust:::sm, data=stanData, init = "0",
-                                    control = list(stepsize = 0.0001),
-                                    chains = 1, iter = nSamplesPerChain,
-                                    seed = rng_seed, chain_id = cid,
-                                    pars=c("theta", "mu1", "mu2",
-                                           "tau1", "tau2",
-                                           "L_Omega1", "L_Omega2", "log_lik"),
-                                    save_dso = FALSE)
+      rng_seed <- sample.int(.Machine$integer.max,1)
 
-      fileName <- paste("RawSamples", iRep, "-", cid, ".dat", sep = "")
-      save( rawSamples, file = paste(procDir, "\\", fileName, sep = ""))
-      return(fileName)
+      fileNames <- vector(mode = "character", length = nChainsPerCore)
 
+      for(i in 1:nChainsPerCore) {
+
+        rawSamples <- rstan::sampling(GcClust:::sm, data = stanData, init = "0",
+                                      control = list(stepsize = 0.0001),
+                                      chains = 1, iter = nSamplesPerChain,
+                                      seed = rng_seed, chain_id = cid,
+                                      pars=c("theta", "mu1", "mu2",
+                                             "tau1", "tau2",
+                                             "L_Omega1", "L_Omega2", "log_lik"),
+                                      save_dso = FALSE)
+
+        fileNames[i] <- paste("RawSamples", cid, "-", i, ".dat", sep = "")
+        save( rawSamples, file = paste(procDir, "\\", fileNames[i], sep = "") )
+
+      }
+      return(fileNames)
     } )
 
     parallel::stopCluster(CL)
-    return(sflist)
+    return(unlist(fnlist))
   }
+
 
   if(nCpuCores > parallel::detectCores())
     stop("The number of requested cpu's must be <= the number of actual cpu's.")
@@ -714,17 +725,12 @@ sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
                     Z = transData$robustPCs[,1:nPCs],
                     tauBounds = tauBounds)
 
-  fileNames <- NULL
-  for(i in 1:nRepetitions) {
-    rng_seed <- sample.int(.Machine$integer.max,1)
-    tmp <- rstanParallelSampler(stanData, nSamplesPerChain, rng_seed,
-                         nCpuCores, i, procDir )
-    fileNames <- c(fileNames, unlist(tmp))
-  }
+  fileNames <- rstanParallelSampler(stanData, nSamplesPerChain,
+                                    nChainsPerCore, nCpuCores, procDir )
 
-  return(list(nChains = nRepetitions * nCpuCores,
+  return(list(nChains = nChainsPerCore * nCpuCores,
               nSamplesPerChain = nSamplesPerChain,
-              nSamplesPWU = nSamplesPerChain/2,
+              nSamplesPWU = as.integer(nSamplesPerChain/2),
               fileNames = fileNames))
 }
 
@@ -1624,8 +1630,8 @@ backTransform <- function(gcData, kappa, nPCs,
   mu2.tmp <- theSamples$mu2 %*%  rEVt + tmp.center
 
   # Back-transformation to concentrations
-  compMean1 <- CoDA::CalcInvIlr( mu1.tmp, t(transData$Psi), kappa = kappa )
-  compMean2 <- CoDA::CalcInvIlr( mu2.tmp, t(transData$Psi), kappa = kappa )
+  compMean1 <- CalcInvIlr( mu1.tmp, t(transData$Psi), kappa = kappa )
+  compMean2 <- CalcInvIlr( mu2.tmp, t(transData$Psi), kappa = kappa )
 
   colnames(compMean1) <- elementNames
   colnames(compMean2) <- elementNames
@@ -1648,8 +1654,8 @@ backTransform <- function(gcData, kappa, nPCs,
     Sigma2.tmp <- rEV %*% Sigma2 %*% rEVt
 
     # Back-transformation to concentrations within the simplex
-    varMatrix1[i, , ] <- CoDA::InvCovTransform( Sigma1.tmp, transData$Psi )
-    varMatrix2[i, , ] <- CoDA::InvCovTransform( Sigma2.tmp, transData$Psi )
+    varMatrix1[i, , ] <- InvCovTransform( Sigma1.tmp, transData$Psi )
+    varMatrix2[i, , ] <- InvCovTransform( Sigma2.tmp, transData$Psi )
   }
 
   return( list( compMean1 = compMean1,
@@ -1705,8 +1711,8 @@ plotStdCompMeans <- function(simplexStats, kappa, simplexModPar, elementOrder,
 
     # reorder the compositional means and then standardize them
     tmp <- compMeans[, elementOrder]
-    tmp <- CoDA::Perturb(center[elementOrder]^(-1), tmp, kappa = kappa)
-    stdCompMeans <- CoDA::Power(tmp, 1/sqrt(metricVariance), kappa = kappa)
+    tmp <- Perturb(center[elementOrder]^(-1), tmp, kappa = kappa)
+    stdCompMeans <- Power(tmp, 1/sqrt(metricVariance), kappa = kappa)
 
     a <- t( apply(stdCompMeans, 2, quantile, probs=c(interval, 0.50 ),
                   names = FALSE ) )
