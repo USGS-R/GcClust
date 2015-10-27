@@ -1,6 +1,6 @@
 Package: GcClust
 Type: Package
-Title: Cluster geochemical samples
+Title: Cluster field samples of geochemical data based on HMC sampling
 Version: 0.1
 Date: 2015-09-17
 Authors@R: person("Karl", "Ellefsen", email = "ellefsen@usgs.gov", role = c("aut", "cre"))
@@ -10,7 +10,6 @@ LazyData: TRUE
 Imports: colorspace,
     ggplot2,
     grid,
-    mclust,
     mvtnorm,
     parallel,
     reshape2,

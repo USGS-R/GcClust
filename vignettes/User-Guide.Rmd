@@ -1,0 +1,281 @@
+---
+title: "User guide for library GcClust"
+author: "Karl J. Ellefsen and David B. Smith"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+    fig_caption: yes
+vignette: >
+  %\VignetteIndexEntry{User Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+# Introduction
+This user guide describes how library GcClust is used to cluster 
+regional geochemical data. To this end, this guide describes how to use
+the functions in package GcClust and how to evaluate the results returned by
+those functions. 
+
+The scope of this user guided is limited. It does not provide detailed 
+descriptions of the function because this information is available with the
+package Help. It does not describe the mathematics, which is the basis
+for many functions; this description will be published separately. Finally, it
+does not provide any information about the geochemical interpretation of 
+clusters.
+
+The goals of this user guide are most readily achieved by showing the 
+step-by-step processing of a data set, so this package includes a 
+regional geochemical data set.
+The data set comprises measurements of 959 soil samples that were collected in 
+the state of Colorado, United States of America. For each sample, 
+the measurements
+include the chemical concentrations of 39 elements. Additional information
+about these data are listed under "CoGeochemData" in the package Help.
+
+This user guide includes R-language scripts that are used to cluster the
+Colorado data. We highly recommend that you copy these scripts into a
+file and execute the scripts. This effort will
+help you become familar with the processing and its analysis. Some details 
+of your
+processing results will differ from the results presented in this
+user guide because of the random nature of the calculations. Nonetheless, 
+the general features of your processing results will be the same.
+
+The remainder of the user's guide is divided into X sections:
+[Preliminary steps],
+[Data transformation and analysis], "Cluster computations," "Computation analysis,"
+"Cluster visualization", "Splitting," and "Clustering with modes."
+
+# Preliminary steps
+
+Create a directory named `Process1`, and set the working directory to 
+`Process1`. Create a file named `ProcessScripts.R`; 
+you will copy the R-language scripts
+from this user guide into this file and then execute them. 
+
+Such a file is valuable
+for at least two reasons. First, the file is a record of how the data
+are processed; this record ensures that the processing is reproducible. Second, modifying a processing
+step is relatively easy in most cases: Only the associated R-language script 
+in the file is editted --- the other scripts remain unchanged.
+
+Copy this code into file `ProcessScript.R` and then execute it.
+```
+library(GcClust)   # install package GcClust
+library(sp)        # install package sp
+
+nPCs <- 21         # number of principal components
+
+# order in which the elements are plotted
+elementOrder <- c( "Sr", "U", "Y", "Nb", "La", 
+                   "Ce", "Th", "Na", "Al", "Ga", 
+                   "Be", "K", "Rb", "Ba", "Pb", 
+                   "Cu", "Zn", "Mo", "Mg", "Sc", 
+                   "Co", "Fe", "V", "Ni", "Cr", 
+                   "Ca", "P", "Ti", "Li", "Mn", 
+                   "Sn", "As", "Bi", "Cd", "In", 
+                   "S",  "Sb", "Tl", "W")
+```
+The comments, which are preceded by `#`, describe either the purpose of the
+R-language script or the meaning of the variables.
+Variables `nPCs` and `elementOrder` are needed for the processing and
+are fully described later in this guide.
+
+Finally, execute these scripts 
+(but don't add them to file `ProcessingScripts.R`):
+```
+ugDemo <- CoGeochemData
+save(ugDemo, file="ugDemo.dat")
+```
+The first script assigns the Colorado geochemical data to variable `ugDemo`;
+the second script writes `ugDemo` to binary file `ugDemo.dat` in the current directory.
+This operation is strictly unnecessary because these data are available within
+package GcClust. Nonetheless, this operation should be performed so that the processing steps within this guide are as close as possible
+to the steps that you will use when you process your own data.
+
+Variable `ugDemo` is specially constructed to store geochemical data. It is 
+a R-language list with three components. The first component `concData`
+is a data container, which is a `SpatialPointsDataFrame` defined 
+within the sp package. This container includes
+both the geochemical concentrations for every field sample
+and the geographic coordinates for every field sample. The second 
+component, `censorIndicators`, is a two dimensional character array. Its
+elements are either "left" or "no", which indicate that the associated 
+geochemical concentration is left censored or not censored, respectively. 
+The third component, `kappa`, is the scalar, constant-sum value
+of the geochemical data. Within `ugDemo`, this value is 1000000 mg/kg. 
+Additional information about these three
+components of `ugDemo` is available under item "CoGeochemData" within the 
+package Help.
+
+# Data transformation and analysis
+
+Copy this code into file `ProcessScript.R` and then execute it. (For the
+remainder of this guide, these "copy" and "execute" instructions are no
+long stated.)
+```
+load("ugDemo.dat")     # Load the binary file with the geochemical data
+
+# Apply the isometric log-ratio transform and the robust principal components 
+# transform. 
+transData <- transformGcData(ugDemo$concData)
+
+# Save the transformed data in binary file "TransData.dat"
+save(transData, file = "TransData.dat")     
+```
+The principal components, which are crucial for the clustering, are stored
+in container `transData` along with other variables.
+
+Function `transformGcData` has a second argument `alpha`, which is assigned
+a default value in the above scripts. Argument `alpha` is the fraction of the
+data that is used to calculate the mean vector and the covariance matrix; it
+may range from 0.50 to 1.00. Relative low values, near 0.50, are appropriate
+for data with high measurement error; 
+whereas relatively high values, near 1.00, are appropriate
+for data with low measurement error. There is no formula for selecting a value;
+it is a matter of judgement.
+Our quality control analyses suggest that the geochemical concentrations in `CoGeochemData`, and
+hence in `ugData`, have low measurement error. Consequently, `alpha` is set
+to 0.98, which is its default value.
+
+Within `ugDemo` there are concentrations for 39 elements, so after the transformations there are 38 principal components. That is, the number of elements minus 1 equals the number of principal components.
+
+The principal components are now analyzed graphically to ensure that they are properly computed and to select appropriate parameters for the clustering. 
+```
+# plots the correlation matrix and histogram of correlations
+plotEdaCorr(transData)
+
+# plot the scree plot
+plotEdaVar(transData)    
+
+# plot boxplots and violinplots of the principal components
+plotEdaDist(transData)   
+```
+
+![Figure. XXX](figures/EdaCorr.png)
+
+The elements of the correlation matrix for the principal components are indexed by the component numbers along the horizontal and vertical axes of the plot. The red diagonal corresponds to the diagonal of the correlation matrix. The plot indicates that the correlations are small, which expected for principal components. The distribution of the correlations is shown with the histogram. The distribution is centered a 0, and extreme tails extend to approximately -0.25 and 0.25. Again, this result is expected. 
+
+![Figure. XXX](figures/EdaVar.png)
+
+The scree plot shows variances associated with each principal component, which are ordered according to decreasing variance. Above each bar is the “cumulative percentage of the total variance.” To understand this quantity, consider the variances for just the first three principal components, namely 1.733, 0.791, and 0.511. The cumulative variances are 1.733, 2.525, and 3.036. These cumulative variances are expressed as percentages of the total variance, which is 4.954. Thus, the cumulative percentages of the total variance are 34.99%, 50.96%, and 61.28%. These cumulative percentages mean that the first component accounts for 34.99% of the total variance, the first and second components for 50.96%, and the first, second, and third components for 61.28%. 
+
+A suitable subset of principal components must be selected for the clustering. Our selection criterion is that the chosen components must account for most of the variance in the data, which is equivalent to most of the information in the data. Thus, the subset always includes the lower-order components, namely component 1, component 2, and so on. The relevant issue is determining the last component in the subset. There is no clear-cut method of resolving this issue, but the cumulative percentage of the total variance is helpful: The higher the cumulative percentage, the greater the amount of information that is used for the clustering. However, if the cummulative percentage is too high, then noise is included in the clustering. Our experience indicates that a suitable percentage ranges from the mid-seventies to the mid-nineties. For this analysis, we use a threshold of 96%, which corresponds to 21 principal components. Consequently, variable `nPCS` is set to 21.
+
+![Figure. XXX](figures/EdaDist.png)
+
+Describe this
+
+
+# Cluster computations
+
+# Analysis of cluster computations
+
+## Check for within-chain label-switching
+
+## Select the chains and their switching
+
+plotPointStats
+
+Sometimes, but infrequently, the samples of the posterior pdf
+are poorly representative a mode. For example, samples in short sections of
+a trace may differ enormously from samples in other sections. The point
+statistics for this trace differ
+enormously from the point statistics for corresponding traces for other
+chains.
+
+If such spurious point statistics are used to calculate
+plot ranges, then the resulting plot is difficult to analyze. To prevent this
+problem, the spurious point statistics are not used to calculate the
+plot ranges. The exclusion applies to all point statistics for the
+associated chain, and the
+chains are desigated by argument \code{excludedChains}. The resulting
+plot will include the spurious point statistics, if it is within the plot
+range.
+
+
+The number of chains that should be combined is about 4.
+
+## Combine the selected chains
+
+
+## Check convergence
+
+## Check the model
+
+# Back transform to concentrations
+
+# Cluster visualization
+
+## Calculate simplex stats
+Why?
+What statistics
+
+```
+simplexStats <- calcSimplexStats(demoD$concData, demoD$kappa)
+save(simplexStats, file = "SimplexStats.dat")
+```
+
+
+The plot depends stongly upon the set of geochemical concentrations
+that are used to compute the standardization. Only those plots using the same standardization can be compared. This situation commonly occurs when the standardization is based on the field samples from the entire survey area. 
+
+plotProbMap
+The symbol colors, symbol sizes, and symbol type have been chosen so that the symbols are easily perceived when they are plotted on a gray background. Be careful when changing these parameters!
+The default values work well, so the occasions to change them should be rare.
+
+
+# Splitting the data set
+
+
+---
+
+
+Vignettes are long form documentation commonly included in packages. Because they are part of the distribution of the package, they need to be as compact as possible. The `html_vignette` output type provides a custom style sheet (and tweaks some options) to ensure that the resulting html is as small as possible. The `html_vignette` format:
+
+- Never uses retina figures
+- Has a smaller default figure size
+- Uses a custom CSS stylesheet instead of the default Twitter Bootstrap style
+
+## Vignette Info
+
+Note the various macros within the `vignette` setion of the metadata block above. These are required in order to instruct R how to build the vignette. Note that you should change the `title` field and the `\VignetteIndexEntry` to match the title of your vignette.
+
+## Styles
+
+The `html_vignette` template includes a basic CSS theme. To override this theme you can specify your own CSS in the document metadata as follows:
+
+    output: 
+      rmarkdown::html_vignette:
+        css: mystyles.css
+
+## Figures
+
+The figure sizes have been customised so that you can easily put two images side-by-side. 
+
+```{r, fig.show='hold'}
+plot(1:10)
+plot(10:1)
+```
+
+You can enable figure captions by `fig_caption: yes` in YAML:
+
+    output:
+      rmarkdown::html_vignette:
+        fig_caption: yes
+
+Then you can use the chunk option `fig.cap = "Your figure caption."` in **knitr**.
+
+## More Examples
+
+You can write math expressions, e.g. $Y = X\beta + \epsilon$, footnotes^[A footnote here.], and tables, e.g. using `knitr::kable()`.
+
+```{r, echo=FALSE, results='asis'}
+knitr::kable(head(mtcars, 10))
+```
+
+Also a quote using `>`:
+
+> "He who gives up [code] safety for [code] speed deserves neither."
+([via](https://twitter.com/hadleywickham/status/504368538874703872))

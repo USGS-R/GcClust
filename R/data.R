@@ -3,7 +3,7 @@
 #' @description
 #' In 2006, soil samples were collected at 960 sites (1 site per 280 square
 #' kilometers) throughout the state of Colorado. These samples were collected
-#' from a depth of 0–15 centimeters and, following a near-total multi-acid
+#' from a depth of 0-15 centimeters and, following a near-total multi-acid
 #' digestion, were analyzed for a suite of 44 major and trace
 #' elements.
 #'

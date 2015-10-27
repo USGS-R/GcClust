@@ -250,18 +250,18 @@ plotEdaDist <- function(transData, relOffset = 0.04, size = 3) {
                          ggplot2::aes(x = factor(Component), y = Value),
                          environment = environment() ) +
     ggplot2::geom_violin(scale = "width", fill = "grey50") +
-    ggplot2::xlab("Principal component") +
-    ggplot2::geom_text(ggplot2::aes(x = factor(Component),
-                                    y = max(df$Value) * (1 + relOffset),
-                                    label = sd), data = df.sd,
-                       size = size, vjust = 0, hjust = 1, angle = 90 )
+    ggplot2::xlab("Principal component")
+#     ggplot2::geom_text(ggplot2::aes(x = factor(Component),
+#                                     y = max(df$Value) * (1 + relOffset),
+#                                     label = sd), data = df.sd,
+#                        size = size, vjust = 0, hjust = 1, angle = 90 )
 
 
 
   grid::grid.newpage()
-  grid::pushViewport(grid::viewport(layout=grid::grid.layout(1,2)))
+  grid::pushViewport(grid::viewport(layout=grid::grid.layout(2,1)))
   print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
-  print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
+  print(p2, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
 
 }
 
@@ -305,267 +305,14 @@ plotEdaCorr <- function(transData) {
     ggplot2::ylab("Count")
 
   grid::grid.newpage()
-  grid::pushViewport(grid::viewport(layout=grid::grid.layout(1,2)))
+  grid::pushViewport(grid::viewport(layout=grid::grid.layout(2,1)))
   print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
-  print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
+  print(p2, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
 
 }
 
 
-#' @title Optimize the posterior pdf using package mclust
-#'
-#' @description Optimize the posterior probability density function of the
-#' finite mixture model. The model implementation and the optimization are
-#' performed with package mclust.
-#'
-#' @param transData     List containing the transformed geochemical
-#' concentrations and related information.
-#' This list is return by function \code{\link{transformGcData}}; the
-#' documentation for function transformGcData includes a complete
-#' description of container \code{transData}.
-#' @param nPCS          Number of principal components that are used in the
-#'                      finite mixture model (See Details).
-#' @param nCpuCores      Number of central processing unit (cpu) cores that
-#'                       are used
-#'                      for parallel computations (See Details).
-#' @param nSoln         Number of solutions (See Details).
-#'
-#' @details
-#' The parameters in the finite mixture model are estimated
-#' from the robust principal components, which are
-#' calculated with function gcTransform and stored as a matrix within
-#' \code{transData}. All matrix elements must contain values;
-#' that is, missing values are not allowed.
-#'
-#' The number of principal components, \code{nPCS}, means that
-#' principal components 1, 2, ..., nPCs are used in the finite mixture model.
-#' That is, all higher-order principal components are not used.
-#'
-#' The maximum of the posterior probability density function (pdf) is calculated
-#' repetitively with different starting points.
-#' The number of repetitive solutions is specified by argument \code{nSoln}.
-#' In practice, it is usually best to use the default value for
-#' argument \code{nSoln}.
-#'
-#' The repetitive solutions are calculated in parallel on multiple central
-#' processing units (cpu's). Of course, the number of requested cpu's must be
-#' less than or equal to the actual number.
-#'
-#' @return A list with the following components is returned.
-#' @return \item{nSoln}{Number of solutions.}
-#' @return \item{theLogLikelihoods}{The logarithms of the likelihoods for
-#' the multiple solutions.}
-#' @return \item{bestClusterResult}{The clustering result with the highest
-#' log-likelihood. The structure is identical to the structure returned by
-#' function Mclust in package mclust.}
-#' @return \item{worstClusterResult}{The clustering result with the lowest
-#' log-likelihood. The structure is identical to the structure returned by
-#' function Mclust in package mclust.}
-#' @return \item{nErrors}{Sometimes the function Mclust fails, and the
-#' total number of such failures is nErrors.}
 
-#' @references
-#' Ellefsen, K.J., Smith, D.B., Horton, J.D., 2014, A modified procedure for
-#' mixture-model clustering of regional geochemical data: Applied Geochemistry,
-#' vol. 51, p. 315-326, doi: http://dx.doi.org/10.1016/j.apgeochem.2014.10.011.
-#'
-#' Fraley, C., Raftery, A.E., 2002. Model-based clustering, discriminant
-#' analysis, and density estimation: Journal of the American Statistical
-#' Association, vol. 97, no. 458, p. 611-631.
-#'
-#' @examples
-#' \dontrun{
-#' fmmMode_mclust <- optFmm_mclust(transData, nPCS)
-#' }
-#'
-#' @export
-optFmm_mclust <- function(transData, nPCS, nCpuCores = 4, nSoln = NULL) {
-
-  CalcClusters_Em <- function( theData, nPDFs, sampleSize, sampleSpace, nSoln ) {
-    # Make mclust available to the processors. This function won't work otherwise.
-    # So, I'm violating the principles in "R packages", p. 34, 82-84
-    require(mclust, quietly = TRUE)
-    theLogLikelihoods <- vector( mode="numeric" )
-    nErrors <- 0
-    for( i in 1:nSoln ) {
-      S <- sample( sampleSpace, size = sampleSize )
-
-      clusterResult <- tryCatch( mclust::Mclust( theData, nPDFs, modelNames=c("VVV"), initialization=list(subset=S) ), error=function(e){ e } )
-
-      if( inherits( clusterResult, "error" ) ) {
-        nErrors <- nErrors + 1
-      } else {
-        theLogLikelihoods <- append( theLogLikelihoods, clusterResult$loglik )
-        if( max( theLogLikelihoods ) == clusterResult$loglik ) {
-          bestClusterResult <- clusterResult
-        }
-        if( min( theLogLikelihoods ) == clusterResult$loglik ) {
-          worstClusterResult <- clusterResult
-        }
-      }
-    }
-
-    return( list( theLogLikelihoods = theLogLikelihoods,
-                  bestClusterResult = bestClusterResult,
-                  worstClusterResult = worstClusterResult,
-                  nErrors = nErrors ) )
-  }
-
-  if(nCpuCores > parallel::detectCores())
-    stop("The number of requested cpu's must be <= the number of actual cpu's.")
-
-  cl <- parallel::makeCluster( nCpuCores )
-  parallel::clusterSetRNGStream( cl, 123 )
-
-  nRows <- nrow( transData$robustPCs )
-  sampleSize <- as.integer( 0.75 * nRows )
-  sampleSpace <- 1:nRows
-  nPDFs <- 2
-
-  if(is.null(nSoln)) {
-    nSoln <- 400 + ( nPDFs - 2 ) * 150 + ( nPCs - 4 ) * 30
-  }
-
-  nSolnPerCore <- as.integer( nSoln / nCpuCores )
-
-  tmpResult <- parallel::clusterCall( cl, CalcClusters_Em,
-                                      transData$robustPCs[,1:nPCs], nPDFs,
-                                      sampleSize, sampleSpace, nSolnPerCore)
-
-  parallel::stopCluster( cl )
-
-  theLogLikelihoods <- tmpResult[[1]]$theLogLikelihoods
-  bestClusterResult <- tmpResult[[1]]$bestClusterResult
-  worstClusterResult <- tmpResult[[1]]$worstClusterResult
-  nErrors <- tmpResult[[1]]$nErrors
-
-  for( i in 2:nCpuCores ) {
-
-    theLogLikelihoods <- append( theLogLikelihoods, tmpResult[[i]]$theLogLikelihoods )
-
-    if( bestClusterResult$loglik < tmpResult[[i]]$bestClusterResult$loglik )
-      bestClusterResult <- tmpResult[[i]]$bestClusterResult
-
-    if( worstClusterResult$loglik > tmpResult[[i]]$worstClusterResult$loglik )
-      worstClusterResult <- tmpResult[[i]]$worstClusterResult
-
-    nErrors <- nErrors + tmpResult[[i]]$nErrors
-  }
-
-  return( list(
-    nSoln = nSoln,
-    theLogLikelihoods = theLogLikelihoods,
-    bestClusterResult = bestClusterResult,
-    worstClusterResult = worstClusterResult,
-    nErrors = nErrors
-  ))
-
-}
-
-#' @title Optimize the posterior pdf using package rstan.
-#'
-#' @description Optimize the posterior probability density function of the
-#' finite mixture model. The model implementation and the optimization are
-#' performed with package rstan.
-#'
-#' @param transData     List containing the transformed geochemical
-#' concentrations and related information.
-#' This list is return by function \code{\link{transformGcData}}, for which the
-#' documentation includes a complete description of container \code{transData}.
-#'
-#' @param nPCS          Number of principal components that are used in the
-#'                      finite mixture model (See Details).
-#'
-#' @param tauBounds     Vector of length 2, containing the lower and upper
-#'                      bounds for tau (See Details).
-#'
-#' @details
-#' The parameters in the finite mixture model are estimated
-#' from the robust principal components, which are stored as a matrix within
-#' \code{transData}.
-#'
-#' The number of principal components, \code{nPCS}, means that
-#' principal components 1, 2, ..., nPCs are used in the finite mixture model.
-#' That is, all higher-order principal components are not used.
-#'
-#' In the finite mixture model, the standard deviations for
-#' a pdf are stored in a vector tau. For each element in this vector, the
-#' prior pdf is uniform; its lower and upper bounds are stored in
-#' tauBounds[1] and tauBounds[2], respectively.
-#'
-#' Unlike function optFmm_mclust, only one solution is calculated with
-#' function optFmm_rstan.
-#'
-#' The optimzation may fail to converge to a mode of the posterior pdf because
-#' the likelihood function approaches infinity near the boundaries
-#' (Marin et al., 2005).
-#' Consequently, checking the results of the optimization is important.
-
-#' The finite mixture model, which has two pdfs, involves five parameters:
-#' \describe{
-#'  \item{theta}{Proportion of population associated with pdf 1.}
-#'  \item{mu1}{Mean vector for pdf 1.}
-#'  \item{mu2}{Mean vector for pdf 2.}
-#'  \item{Sigma1}{Covariance matrix for pdf 1.}
-#'  \item{Sigma2}{Covariance matrix for pdf 2.}
-#' }
-#' There are also two additional variables associated with the model:
-#' \describe{
-#'  \item{g}{Conditional probability that a field sample is associated
-#'  with pdf 1.}
-#'  \item{log_lik}{The logarithm of the likelihood function.}
-#' }
-#'
-#' @return A list that is returned from function optimizing within the
-#' rstan package. If the optimization successfully locates a mode in
-#' the posterior pdf, then the list has two elements:
-#' @return \item{par}{List comprising the point estimates for
-#' the following model parameters:
-#' \describe{
-#'  \item{theta}{Proportion of population associated with pdf 1.}
-#'  \item{mu1}{Mean vector for pdf 1.}
-#'  \item{mu2}{Mean vector for pdf 2.}
-#'  \item{tau1}{Standard deviation vector for pdf 1.}
-#'  \item{tau2}{Standard deviation vector for pdf 2.}
-#'  \item{L_Omega1}{Lower triangle of the correlation matrix for pdf 1.}
-#'  \item{L_Omega2}{Lower triangle of the correlation matrix for pdf 2.}
-#'  \item{log_lik}{The logarithm of the likelihood function.}
-#' }
-#' }
-#' @return \item{value}{The logarithm of the posterior pdf at the mode. Note
-#' that this variable is not the logarithm of the likelihood function.}
-#'
-#' @references
-#' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B., Vehtari, A.,
-#' and Rubin, D.B., 2014, Bayesian data analysis (3rd ed.),
-#' CRC Press.
-#'
-#' Stan Development Team, 2015, Stan Modeling Language - User’s Guide
-#' and Reference Manual, Version 2.6.0, available on line at
-#' http://mc-stan.org/ (last accessed October 2015).
-#'
-#' @examples
-#' \dontrun{
-#' fmmMode_rstan <- optFmm_rstan(transData, nPCS, tauBounds = c(0.001,20))
-#' }
-#'
-#' @export
-optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
-
-  # Load rstan because it calls internal functions.
-  # So, I'm violating the principles in "R packages", p. 34, 82-84
-  require(rstan, quietly = TRUE)
-
-  stanData <- list( M = nPCs,
-                    N = nrow(transData$robustPCs),
-                    Z = transData$robustPCs[,1:nPCs],
-                    tauBounds = tauBounds )
-
-  pdfMode <- rstan::optimizing( GcClust:::sm, data = stanData, init="0",
-                                refresh = 1, algorithm = "BFGS",
-                                hessian = FALSE, as_vector = FALSE )
-  return(pdfMode)
-}
 
 #' @title Sample the posterior pdf
 #'
@@ -585,7 +332,7 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 #' @param nSamplesPerChain  Number of samples in each chain (See details).
 #' @param nChainsPerCore Number of chains that each core computes (See Details).
 #' @param nCpuCores     Number of central processing units (cpu's) that are
-#'                      used for one set of parallel computations (See Details).
+#'                      used (See Details).
 #' @param procDir      Directory into which the results are written
 #'                      (See Details).
 #'
@@ -666,7 +413,7 @@ optFmm_rstan <- function(transData, nPCS, tauBounds = c(0.001, 50)) {
 #' }
 #'
 #' @export
-sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
+sampleFmm <- function(transData, nPCs,
                       nSamplesPerChain = 1000,
                       nChainsPerCore = 2,
                       nCpuCores = parallel::detectCores(),
@@ -690,14 +437,72 @@ sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
       # p. 34, 82-84
       require(rstan, quietly = TRUE)
 
-      rng_seed <- sample.int(.Machine$integer.max,1)
-
       fileNames <- vector(mode = "character", length = nChainsPerCore)
 
       for(i in 1:nChainsPerCore) {
 
-        rawSamples <- rstan::sampling(GcClust:::sm, data = stanData, init = "0",
+        rng_seed <- sample.int(.Machine$integer.max,1)
+
+        # Sampling from finite mixture model can be difficult --- the chains
+        # tend to get stuck. I have read two different suggestions in the
+        # emails for the rstan users group.
+        #
+        # 1. Suggestions from Michael Betacourt "This is ... a failure of
+        # convergence. The problem is the extreme curvature near zero which
+        # causes the gradients, and hence the HMC transitions, to fail."
+        # "An ... option is to decrease the step size (or increase the
+        # target average acceptance probability in the adaptation).
+        # Alternatively you can try to find a parameterization that reduces
+        # the change in curvature.  Lastly  you can reduce the curvature by
+        # smoothing out your model ..."
+        # "... just set adapt delta=0.9 (or 0.95, 0.99, increasing until
+        # n_divergence is always zero).  The other defaults will change
+        # (or not) as necessary automatically.  In general increasing the
+        # target average acceptance probability may lead to smaller
+        # efficiency but it will always lead to a more robust sampler
+        # so it’s a very safe knob to turn."
+        #
+        # The user found that this suggestion did not work well.
+        #
+        # I too tried
+        # this suggestion and also switched to a smooth prior pdf for tau1 and
+        # tau2. I found that the number of stuck chains was signficantly
+        # reduced.I don't know which of the two actions had this effect.
+        # However, one chain did get stuck. In some
+        # test of short chains, I found that the initial values of the chains
+        # (for a particular parameter) varied a lot; some where quite large or
+        # small. Is init = "0" not working? As adapt_delta increases,
+        # the sampling time increases. If adapt_delta is 0.95 or larger, the
+        # sampling time can be relatively long.
+        #
+        # https://groups.google.com/forum/?fromgroups#!searchin/stan-users/stuck$20chains/stan-users/xEG18UzoCGo/EeXeqPox3sAJ
+        #
+        # 2. Suggestion from another consultant: Reduce parameter stepsize
+        # to a small value, say 0.0001. Betacourt did not comment on this
+        # suggestion, so I suspect that he doesn't favor it. In some tests,
+        # I found that the initial values of the chains (for a particular
+        # parameter) were identical. This behavior is expected because
+        # init = "0". Perhaps init = "random"
+
+        gen_inits <- function() {
+          areInGrp1 <- sample(c(TRUE,FALSE), size = stanData$N,
+                              prob = c(0.3, 0.7), replace = TRUE)
+          return(list(
+            theta = runif(1, min = 0.35, max = 0.65),
+            mu1 = apply(stanData$Z[areInGrp1,], 2, mean ),
+            mu2 = apply(stanData$Z[!areInGrp1,], 2, mean ),
+            tau1 = apply(stanData$Z[areInGrp1,], 2, sd ),
+            tau2 = apply(stanData$Z[!areInGrp1,], 2, sd ),
+            L_Omega1 = diag(stanData$M),
+            L_Omega2 = diag(stanData$M)
+          ))
+        }
+
+
+        rawSamples <- rstan::sampling(GcClust:::sm, data = stanData,
+                                      init = gen_inits,
                                       control = list(stepsize = 0.0001),
+                                    # control = list(adapt_delta = 0.95),
                                       chains = 1, iter = nSamplesPerChain,
                                       seed = rng_seed, chain_id = cid,
                                       pars=c("theta", "mu1", "mu2",
@@ -722,8 +527,7 @@ sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
 
   stanData <- list( M = nPCs,
                     N = nrow(transData$robustPCs),
-                    Z = transData$robustPCs[,1:nPCs],
-                    tauBounds = tauBounds)
+                    Z = transData$robustPCs[,1:nPCs])
 
   fileNames <- rstanParallelSampler(stanData, nSamplesPerChain,
                                     nChainsPerCore, nCpuCores, procDir )
@@ -733,62 +537,6 @@ sampleFmm <- function(transData, nPCs, tauBounds = c(0.001, 50),
               nSamplesPWU = as.integer(nSamplesPerChain/2),
               fileNames = fileNames))
 }
-
-#' @title Plot the likelihoods of the modes
-#'
-#' @description Plot selected traces for each chain to assess whether
-#' within-chain label switching has occurred.
-#'
-#' @param fmmSamples
-#' List containing samples of the posterior pdf and
-#' related information. This list is return by function
-#' \code{\link{sampleFmm}}; the documentation for function sampleFmm includes
-#' a complete description of container \code{fmmSamples}.
-#'
-#' @details
-#' Three plots are generated:
-#' \itemize{
-#'  \item The first plot comprises two traces: A trace for element [1]
-#'  of the mean vector for pdf 1 (mu1[1]), and another trace for
-#'  element [1] of the mean vector for pdf 2 (mu2[1]).
-#'  \item The second plot also comprises two traces: A trace for element [1,1]
-#'  of the covariance matrix for pdf 1 (Sigma1[1,1]), and another trace for
-#'  element [1,1] of the covariance matrix for pdf 2 (Sigma2[1,1]).
-#'  \item The third plot has one trace of model proportion associated with
-#'  pdf 1 (theta)
-#' }
-#'
-#' This function may require a lot of time (e.g., 1 or 2 minutes).
-#'
-#' @examples
-#' \dontrun{
-#' plotModeLikelihoods(fmmMode_mclust, fmmMode_rstan, binwidthScale = 100)
-#' }
-#'
-#' @export
-plotModeLikelihoods <- function(fmmMode_mclust, fmmMode_rstan,
-                                binwidthScale = 30,
-                                rugColour = "green",
-                                rugSize = 1) {
-
-  mclustData <- data.frame(logLikelihood = fmmMode_mclust$theLogLikelihoods)
-  theRange <- range(mclustData$logLikelihood)
-  p <- ggplot2::ggplot(mclustData,
-                       ggplot2::aes(x = logLikelihood),
-                       environment = environment()) +
-    ggplot2::geom_histogram(binwidth = (theRange[2] - theRange[1])/binwidthScale) +
-    ggplot2::xlab("Log-likelihood") +
-    ggplot2::ylab("Count")
-
-  if(!is.na(fmmMode_rstan$par$log_lik)) {
-    rstanData <- data.frame(logLikelihood = fmmMode_rstan$par$log_lik)
-    p <- p + ggplot2::geom_rug(data = rstanData, colour=rugColour, size = rugSize )
-  }
-
-  print(p)
-
-}
-
 
 
 #' @title Plot selected traces
@@ -824,7 +572,7 @@ plotModeLikelihoods <- function(fmmMode_mclust, fmmMode_rstan,
 #' }
 #'
 #' @export
-plotSelectedTraces <- function(samplePars, procDir) {
+plotSelectedTraces <- function(samplePars, procDir = ".") {
 
   sampleIndices <- 1:samplePars$nSamplesPWU + samplePars$nSamplesPWU
   N <- length(samplePars$fileNames)
@@ -890,20 +638,6 @@ plotSelectedTraces <- function(samplePars, procDir) {
 #' \code{\link{sampleFmm}}, for which the documentation includes
 #' a complete description of container \code{samplePars}.
 #'
-#' @param fmmMode_mclust
-#' List containing information about the optimization
-#' of the posterior pdf for which the model and the optimization are
-#' performed by package mclust. This list is returned by
-#' function \code{\link{optFmm_mclust}}, for which the documentation
-#' includes a complete description of container \code{fmmMode_mclust}.
-#'
-#' @param fmmMode_rstan
-#' List containing information about the optimization
-#' of the posterior pdf for which the model and the optimization are
-#' performed by package rstan. This list is returned by
-#' function \code{\link{optFmm_rstan}}, for which the documentation
-#' includes a complete description of container \code{fmmMode_rstan}.
-#'
 #' @param procDir
 #' Directory containing the files with the \code{stanfit} objects.
 #'
@@ -920,13 +654,16 @@ plotSelectedTraces <- function(samplePars, procDir) {
 #' the plot range, the index of the associated chain is specified in
 #' argument \code{excludedChains}.
 #'
+#' The calculation of the point statistics for every chain requires a
+#' minute or two.
+#'
 #' @examples
 #' \dontrun{
-#' plotPointStats(samplePars, fmmMode_mclust, fmmMode_rstan)
+#' plotPointStats(samplePars)
 #' }
 #'
 #' @export
-plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan, procDir,
+plotPointStats <- function(samplePars, procDir = ".",
                            excludedChains = NULL ) {
 
   N <- length(samplePars$fileNames)
@@ -947,21 +684,19 @@ plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan, procDir,
     theQuantiles[, , i] <- t(chainStats[statNames, -(1:2), 1])
   }
 
-  Internal1 <- function( X, excludedChains,
-                         parMode_mclust, parMode_rstan, yLabel ) {
+  Internal1 <- function( X, excludedChains, yLabel ) {
     if(is.null(excludedChains)) {
-      yRange <- range( X, parMode_mclust, parMode_rstan, na.rm = TRUE )
+      yRange <- range( X, na.rm = TRUE )
     } else {
-      yRange <- range( X[, -excludedChains], parMode_mclust,
-                       parMode_rstan, na.rm = TRUE )
+      yRange <- range( X[, -excludedChains], na.rm = TRUE )
     }
 
-    solutions <- c( as.character(1:ncol(X)), "mclust", "rstan")
+    solutions <- as.character(1:ncol(X))
 
     df <- data.frame(x = factor(solutions, levels = solutions),
-                      y = c( X["0.5", ], parMode_mclust, parMode_rstan ),
-                      ymin = c( X["0.025",], parMode_mclust, parMode_rstan ),
-                      ymax = c( X["0.975",], parMode_mclust, parMode_rstan ) )
+                      y = X["0.5", ],
+                      ymin = X["0.025",],
+                      ymax = X["0.975",] )
     p <- ggplot2::ggplot(df,
                           ggplot2::aes(x = x, y = y, ymin = ymin, ymax = ymax),
                           environment = environment() ) +
@@ -974,24 +709,23 @@ plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan, procDir,
     return(p)
   }
 
-  Internal2 <- function( X, Y, excludedChains,
-                         parMode_mclust, parMode_rstan, yLabel ) {
+  Internal2 <- function( X, Y, excludedChains, yLabel ) {
     if(is.null(excludedChains)) {
-      yRange <- range( X, Y, parMode_mclust, parMode_rstan, na.rm = TRUE )
+      yRange <- range( X, Y, na.rm = TRUE )
     } else {
       yRange <- range( X[, -excludedChains], Y[, -excludedChains],
-                       parMode_mclust, parMode_rstan, na.rm = TRUE )
+                       na.rm = TRUE )
     }
 
-    solutions <- c( as.character(1:ncol(X)), "mclust", "rstan")
+    solutions <- as.character(1:ncol(X))
 
     df <- data.frame(x = factor(solutions, levels = solutions),
-                     y1 = c( X["0.5", ], parMode_mclust[1], parMode_rstan[1] ),
-                     ymin1 = c( X["0.025",], parMode_mclust[1], parMode_rstan[1] ),
-                     ymax1 = c( X["0.975",], parMode_mclust[1], parMode_rstan[1] ),
-                     y2 = c( Y["0.5", ], parMode_mclust[2], parMode_rstan[2] ),
-                     ymin2 = c( Y["0.025",], parMode_mclust[2], parMode_rstan[2] ),
-                     ymax2 = c( Y["0.975",], parMode_mclust[2], parMode_rstan[2] ) )
+                     y1 = X["0.5", ],
+                     ymin1 = X["0.025",],
+                     ymax1 = X["0.975",],
+                     y2 = Y["0.5", ],
+                     ymin2 = Y["0.025",],
+                     ymax2 = Y["0.975",] )
     p <- ggplot2::ggplot(df, environment = environment() ) +
       ggplot2::geom_pointrange(ggplot2::aes(x = x, y = y1, ymin = ymin1, ymax = ymax1),
                                colour = "blue") +
@@ -1005,28 +739,12 @@ plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan, procDir,
     return(p)
   }
 
-  fmmMode_mclust <- fmmMode_mclust$bestClusterResult
-
-  p1 <- Internal2(theQuantiles[, "mu1[1]", ],
-                  theQuantiles[, "mu2[1]", ],
-                  excludedChains,
-                  fmmMode_mclust$parameters$mean[1,1:2],
-                  c(fmmMode_rstan$par$mu1[1],fmmMode_rstan$par$mu2[1]),
-                 "Element 1 of the mean vectors")
-  p2 <- Internal2(theQuantiles[, "tau1[1]", ],
-                  theQuantiles[, "tau2[1]", ],
-                  excludedChains,
-                  sqrt(fmmMode_mclust$parameters$variance$sigma[1,1,1:2]),
-                  c(fmmMode_rstan$par$tau1[1],fmmMode_rstan$par$tau2[1]),
-                 "Element 1 of the standard deviation vectors")
-  p3 <- Internal1(theQuantiles[, "theta", ], excludedChains,
-               fmmMode_mclust$parameters$pro[1],
-               fmmMode_rstan$par$theta,
-               "theta")
-  p4 <- Internal1(theQuantiles[, "log_lik", ], excludedChains,
-               fmmMode_mclust$loglik,
-               fmmMode_rstan$par$log_lik,
-               "Log-likelihood")
+  p1 <- Internal2(theQuantiles[, "mu1[1]", ], theQuantiles[, "mu2[1]", ],
+                  excludedChains, "Element 1 of the mean vectors")
+  p2 <- Internal2(theQuantiles[, "tau1[1]", ], theQuantiles[, "tau2[1]", ],
+                  excludedChains, "Element 1 of the standard deviation vectors")
+  p3 <- Internal1(theQuantiles[, "theta", ], excludedChains, "theta")
+  p4 <- Internal1(theQuantiles[, "log_lik", ], excludedChains, "Log-likelihood")
 
   grid::grid.newpage()
   grid::pushViewport(grid::viewport(layout = grid::grid.layout(2,2)))
@@ -1051,6 +769,9 @@ plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan, procDir,
 #'
 #' @param selectedChains  Dataframe listing the indices of the chains that
 #'  are combined. (See Details).
+#'
+#' @param procDir
+#' Directory containing the files with the \code{stanfit} objects.
 #'
 #' @details
 #' Argument \code{selectedChains} is a dataframe with two columns. The first
@@ -1101,7 +822,7 @@ plotPointStats <- function(samplePars, fmmMode_mclust, fmmMode_rstan, procDir,
 #' }
 #'
 #' @export
-combineChains <- function(samplePars, selectedChains) {
+combineChains <- function(samplePars, selectedChains, procDir = ".") {
 
   sfList <- vector(mode = "list")
   for(k in 1:nrow(selectedChains)) {
@@ -1692,6 +1413,14 @@ backTransform <- function(gcData, kappa, nPCs,
 #' compositional means. Typical values are 50, 90, or 95.
 #' @param symbolSize The size of the plotting symbol.
 #'
+#' @details
+#' A plot symbol represents the distribution for a mean component.
+#' The vertical line within a symbol represent the percentage interval of the
+#' distribution, which is specified as an argument to this function.
+#' For example, if the percentage interval is 95, then bottom and the top
+#' of the vertical line represent the 0.025 and 0.975 quantiles of the
+#' distribution. The circle represents the median of the distribution
+#'
 #' @references
 #' Pawlowsky-Glahn, V., Egozcue, J.J., and Tolosana-Delgado, R., 2015, Modeling
 #' and analysis of compositional data: John Wiley and Sons, Ltd.
@@ -1780,7 +1509,7 @@ plotStdCompMeans <- function(simplexStats, kappa, simplexModPar, elementOrder,
 #' The size of the plotting symbol.
 #'
 #' @details
-#' The plot does not include intervals from the distributions of the
+#' The plot does not include distribution intervals of the
 #' mean components, because the intervals are smaller than the symbol size.
 #'
 #' @examples
@@ -1855,7 +1584,7 @@ plotCompMeans <- function(simplexModPar, elementOrder, symbolSize = 2) {
 #' between the respective chemical elements. The scaling is desirable because
 #' it reduces the large range of the variances, making it easier to
 #' visualize all of the variances together. The scaling function is the
-#' square root; so, the pixels in the plot strickly represent standard devations
+#' square root; so, the pixels in the plot strictly represent standard devations
 #' of the log-ratios between the respective chemical elements.
 #'
 #' @references
@@ -1962,29 +1691,41 @@ plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
 #' The plotting attributes are specified by arguments \code{probIntervals},
 #' \code{symbolIndices}, \code{symbolSizes}, and \code{symbolColors}. To
 #' understanding the specification of these attributes, consider their default
-#' values, which pertain to three probability intervals.
+#' values, which pertain to four probability intervals.
 #'
-#' Vector \code{probIntervals} has elements 0, 0.1, 0.9, and 1. These four
-#' elements specify three probability intervals: [0,0.1], [0.1,0.9], and
+#' Vector \code{probIntervals} has elements 0, 0.1, 0.5, 0.9, and 1. These five
+#' elements specify four probability intervals: [0,0.1], [0.1,0.5],
+#' [0.5,0.9] and
 #' [0.9,1]. Notice that the first and last elements of \code{probIntervals}
-#' are 0 and 1 respectively. The first interval, [0,0.1] is interpreted to
-#' indicate the
-#' extent to which the field sample is associated with the second pdf
-#' in the finite mixture model.
-#' The third interval, [0.9,1] is interpreted to indicate the
-#' extent to which the field sample is associated with the first pdf
-#' in the finite mixture model. The second (middle) interval, [0.1,0.9]
-#' is interpreted to indicate the extent to which the field sample is
-#' associated with both pdfs in the finite mixture model.
+#' are 0 and 1 respectively. The probability intervals are used to
+#' classify the field samples based upon their associated conditional
+#' probabilities:
+#' \itemize{
+#'  \item If the conditional probability of a field sample is
+#'  within the interval [0,0.1], then the field sample is classified as
+#'  "strongly associated with pdf 2" and is assigned the color red. This
+#'  color is consistent with the colors used in functions
+#'  \code{\link{plotStdCompMeans}} and \code{\link{plotCompMeans}}.
+#'  \item If the conditional probability of a field sample is
+#'  within the interval [0.1,0.5], then the field sample is classified as
+#'  "moderately associated with pdf 2" and is assigned the color yellow.
+#'  \item If the conditional probability of a field sample is
+#'  within the interval [0.5,0.9], then the field sample is classified as
+#'  "moderately associated with pdf 1" and is assigned the color green.
+#'  \item If the conditional probability of a field sample is
+#'  within the interval [0.9,1], then the field sample is classified as
+#'  "strongly associated with pdf 1" and is assigned the color blue. This
+#'  color is consistent with the colors used in functions
+#'  \code{\link{plotStdCompMeans}} and \code{\link{plotCompMeans}}.
+#' }
 #'
-#' Because, in this explanation, vector \code{probIntervals} specifies three
+#' Because, in this explanation, vector \code{probIntervals} specifies four
 #' probability intervals, arguments for vectors \code{symbolIndices},
-#' \code{symbolSizes}, and \code{symbolColors} must have three elements.
+#' \code{symbolSizes}, and \code{symbolColors} must have four elements.
 #' The symbol indices, symbol sizes, and symbol colors are described in
 #' Murrell (2006, p. 55-56, 68, 69).
 #'
-#' This function adds symbols to a map that has already been plotted. Obviously,
-#' the user must plot that map before calling this funcion.
+#' This function adds symbols to a map that has already been plotted.
 #'
 #' @references
 #' Murrell, P., 2006, R graphics: Chapman & Hall / CRC.
@@ -1997,10 +1738,10 @@ plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
 #'
 #' @export
 plotClusters <- function(concData, condProbs1,
-                        probIntervals = c( 0, 0.1, 0.9, 1.0 ),
-                        symbolIndices = c( 16, 16, 16 ),
-                        symbolSizes = c( 1/3, 1/2, 1/3 ),
-                        symbolColors = c( "red", "green", "blue" ) ) {
+                        probIntervals = c( 0, 0.1, 0.5, 0.9, 1.0 ),
+                        symbolIndices = c( 16, 16, 16, 16 ),
+                        symbolSizes = c( 1/3, 1/3, 1/3, 1/3 ),
+                        symbolColors = c( "red", "yellow", "green", "blue" ) ) {
 
   locations <- coordinates( concData )
 
@@ -2013,8 +1754,8 @@ plotClusters <- function(concData, condProbs1,
 
     if( sum(areInInterval) == 0 ) next
 
-    locations.sp <- sp::SpatialPoints( locations[areInInterval,],
-                                       proj4string=CRS( "+proj=longlat +ellps=WGS84" ) )
+    locations.sp <- sp::SpatialPoints( locations[areInInterval, ],
+                                       proj4string = CRS( "+proj=longlat +ellps=WGS84" ) )
     sp::plot( locations.sp, add=TRUE, pch=symbolIndices[i],
               col=symbolColors[i], cex=symbolSizes[i] )
 
