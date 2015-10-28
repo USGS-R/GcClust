@@ -4,10 +4,9 @@
 #' @description Calculate the sample center, total variation matrix, and
 #' the metric variance.
 #'
-#' @param gcData   SpatialPointsDataFrame storing the geochemical
-#'                 concentrations and locations of each field sample
-#' @param kappa    Constant-sum value for the geochemical concentrations.
-#'                 Typically \code{kappa} equals 1,000,000.
+#' @param gcData
+#' List containing the geochemical and related data. This container is
+#' described in the package documentation.
 #'
 #' @details
 #' The sample statistics are described in
@@ -26,15 +25,15 @@
 #'
 #' @examples
 #' \dontrun{
-#' simplexStats <- calcSimplexStats( gcData, kappa )
+#' simplexStats <- calcSimplexStats(gcData)
 #' }
 #'
 #' @export
-calcSimplexStats <- function( gcData, kappa ) {
+calcSimplexStats <- function(gcData) {
 
-  concData <- as.matrix(gcData@data)
+  concData <- as.matrix(gcData$concData@data)
 
-  sampleCenter <- CalcCompCenter( concData, kappa=kappa )
+  sampleCenter <- CalcCompCenter( concData, kappa = gcData$constSumValue )
   variationMatrix <- CalcVariationMatrix( concData )
   metricVariance <- CalcTotalVariance( variationMatrix )
 
@@ -50,8 +49,9 @@ calcSimplexStats <- function( gcData, kappa ) {
 #' isometric log-ratio transform and then with the robust principal
 #' component transform.
 #'
-#' @param gcData   SpatialPointsDataFrame storing the geochemical
-#'                 concentrations and location for each field sample.
+#' @param gcData
+#' List containing the geochemical and related data. This container is
+#' described in the package documentation.
 #'
 #' @param alpha         Fraction of the data used for the robust principal
 #'                      component transform (See Details).
@@ -109,7 +109,7 @@ calcSimplexStats <- function( gcData, kappa ) {
 #' @export
 transformGcData <- function(gcData, alpha = 0.98) {
 
-  X <- as.matrix(gcData@data)
+  X <- as.matrix(gcData$concData@data)
 
   Psi <- CalcPsiMatrix2( ncol(X) )
   ilrCoefs <- CalcIlrCoefs( X, t(Psi) )
@@ -1274,10 +1274,10 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
 #' of the finite mixture model to the correpsonding quantities for the simplex
 #' (that is, compostional means and variation matrices).
 #'
-#' @param gcData   SpatialPointsDataFrame storing the geochemical
-#'                 concentrations and locations of each field sample
-#' @param kappa    Constant-sum value for the geochemical concentrations.
-#'                 Typically \code{kappa} equals 1,000,000.
+#' @param gcData
+#' List containing the geochemical and related data. This container is
+#' described in the package documentation.
+#'
 #' @param nPCS          Number of principal components that were used in the
 #'                      finite mixture model.
 #'
@@ -1287,6 +1287,7 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
 #' This list is return by function \code{\link{transformGcData}}, for which the
 #' documentation includes a complete
 #' description of container \code{transData}.
+#'
 #' @param combinedChains
 #' A \code{stanfit} object containg multiple Monte Carlo chains. This
 #' object is return by function \code{\link{combineChains}}, for which the
@@ -1321,16 +1322,14 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
 #'
 #' @examples
 #' \dontrun{
-#' simplexModPar <- backTransform( gcData, kappa, nPCs,
-#'                                 transData, combinedChains)
+#' simplexModPar <- backTransform( gcData, nPCs, transData, combinedChains)
 #' }
 #'
 #' @export
 
-backTransform <- function(gcData, kappa, nPCs,
-                          transData, combinedChains) {
+backTransform <- function(gcData, nPCs, transData, combinedChains) {
 
-  elementNames <- names(gcData)
+  elementNames <- names(gcData$concData)
 
   # dimension within the simplex
   D <- length(elementNames)
@@ -1351,8 +1350,8 @@ backTransform <- function(gcData, kappa, nPCs,
   mu2.tmp <- theSamples$mu2 %*%  rEVt + tmp.center
 
   # Back-transformation to concentrations
-  compMean1 <- CalcInvIlr( mu1.tmp, t(transData$Psi), kappa = kappa )
-  compMean2 <- CalcInvIlr( mu2.tmp, t(transData$Psi), kappa = kappa )
+  compMean1 <- CalcInvIlr( mu1.tmp, t(transData$Psi), kappa = gcData$constSumValue )
+  compMean2 <- CalcInvIlr( mu2.tmp, t(transData$Psi), kappa = gcData$constSumValue )
 
   colnames(compMean1) <- elementNames
   colnames(compMean2) <- elementNames
@@ -1392,10 +1391,6 @@ backTransform <- function(gcData, kappa, nPCs,
 #' finite mixture model. The standardization is based on the geochemical
 #' concentrations that were used in the finite mixture model.
 #'
-#' @param simplexStats   SpatialPointsDataFrame storing the geochemical
-#'                 concentrations that were used in the finite mixture model.
-#' @param kappa    Constant-sum value for the geochemical concentrations.
-#'                 Typically \code{kappa} equals 1,000,000.
 #' @param simplexModPar
 #' List containing Monte Carlo samples of the selected parameters
 #' in the finite mixture model.
@@ -1405,12 +1400,23 @@ backTransform <- function(gcData, kappa, nPCs,
 #' for each pdf).
 #' This list is return by function \code{\link{backTranform}}, for which the
 #' documentation includes a complete description of this container.
-#' \code{simplexModPar}.
+#'
+#' @param simplexStats
+#' List containing statistics for the simplex, which will be used for the
+#' standardization. This list is return by function
+#' \code{\link{calcSimplexStats}}, for which the
+#' documentation includes a complete description of this container.
+#'
+#' @param gcData
+#' List containing the geochemical and related data. This container is
+#' described in the package documentation.
 #'
 #' @param elementOrder Vector specifying the order in which the elements are
 #' plotted.
+#'
 #' @param intervalPercentage Interval for the distributions of the standardized
 #' compositional means. Typical values are 50, 90, or 95.
+#'
 #' @param symbolSize The size of the plotting symbol.
 #'
 #' @details
@@ -1427,11 +1433,11 @@ backTransform <- function(gcData, kappa, nPCs,
 #'
 #' @examples
 #' \dontrun{
-#' plotStdCompMeans( simplexStats, kappa, simplexModPar, elementOrder)
+#' plotStdCompMeans(simplexModPar, simplexStats, gcData, elementOrder)
 #' }
 #'
 #' @export
-plotStdCompMeans <- function(simplexStats, kappa, simplexModPar, elementOrder,
+plotStdCompMeans <- function(simplexModPar, simplexStats, gcData, elementOrder,
                           intervalPercentage = 95, symbolSize = 0.75) {
 
   Internal1 <- function(compMeans, kappa, elementOrder,
@@ -1460,15 +1466,17 @@ plotStdCompMeans <- function(simplexStats, kappa, simplexModPar, elementOrder,
   # barycenter for the standardized concentrations
   # Strictly, the barycenter is a vector in which all elements are equal. Here
   # variable barycenter is a scalar, which records the value of one element.
-  barycenter <- kappa / length(simplexStats$sampleCenter)
+  barycenter <- gcData$constSumValue / length(simplexStats$sampleCenter)
 
   tailPercentage <- 0.5*(100.0-intervalPercentage)
   interval <- c(tailPercentage,100.0-tailPercentage)/100.0
 
-  df1 <- Internal1(simplexModPar$compMean1, kappa, elementOrder,
-                   simplexStats$sampleCenter, simplexStats$metricVariance, interval, 1 )
-  df2 <- Internal1(simplexModPar$compMean2, kappa, elementOrder,
-                   simplexStats$sampleCenter, simplexStats$metricVariance, interval, 2 )
+  df1 <- Internal1(simplexModPar$compMean1, gcData$constSumValue, elementOrder,
+                   simplexStats$sampleCenter, simplexStats$metricVariance,
+                   interval, 1 )
+  df2 <- Internal1(simplexModPar$compMean2, gcData$constSumValue, elementOrder,
+                   simplexStats$sampleCenter, simplexStats$metricVariance,
+                   interval, 2 )
 
   compData <- rbind(df1, df2)
 
@@ -1657,9 +1665,9 @@ plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
 #' the pdfs in the finite mixture model. That is, the attributes indicate the
 #' cluster to which the field sample belongs.
 #'
-#' @param concData
-#' SpatialPointsDataFrame storing the geochemical
-#' concentrations and locations of each field sample.
+#' @param gcData
+#' List containing the geochemical and related data. This container is
+#' described in the package documentation.
 #'
 #' @param condProbs1
 #' A matrix containing the Monte Carlo samples of the
@@ -1737,13 +1745,13 @@ plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
 #' }
 #'
 #' @export
-plotClusters <- function(concData, condProbs1,
+plotClusters <- function(gcData, condProbs1,
                         probIntervals = c( 0, 0.1, 0.5, 0.9, 1.0 ),
                         symbolIndices = c( 16, 16, 16, 16 ),
                         symbolSizes = c( 1/3, 1/3, 1/3, 1/3 ),
                         symbolColors = c( "red", "yellow", "green", "blue" ) ) {
 
-  locations <- coordinates( concData )
+  locations <- coordinates( gcData$concData )
 
   # median of conditional probabilites
   g <- apply(condProbs1, 2, median)
@@ -1766,19 +1774,11 @@ plotClusters <- function(concData, condProbs1,
 #' @title Split the geochemical data
 #'
 #' @description The geochemical data, which have been clustered, are split
-#' into two groups according to the clusters.
+#' into two groups based on their conditional probabilites.
 #'
-#' @param concentrationData
-#' SpatialPointsDataFrame storing the geochemical
-#' concentrations and locations of each field sample.
-#'
-#' @param censorIndicators
-#' Matrix specifying which samples in \code{concentrationData} are
-#' censored and, if so, have imputed values. Each column pertains to an
-#' element,
-#' and each row pertains to a field sample. Matrix elements may be "no",
-#' "left", or "right", indicating that the concentration is "not censored",
-#'  "left-censored", or "right-censored".
+#' @param gcData
+#' List containing the geochemical and related data. This container is
+#' described in the package documentation.
 #'
 #' @param condProbs1
 #' A matrix containing the Monte Carlo samples of the
@@ -1791,38 +1791,31 @@ plotClusters <- function(concData, condProbs1,
 #'
 #' @details
 #' For each
-#' field sample, the median of the Monte Carlo samples of conditional probability
+#' field sample, the median of the Monte Carlo samples of conditional
+#' probability
 #' is calculated. If this median is between 1-threshold and 1, then the
 #' field sample is associated with pdf 1 in the finite mixture model. However,
 #' if this median is between 0 and threshold, then the field samples is
 #' associated with pdf 2 in the finite mixture model. This criterion is
 #' used to split the field samples into two groups.
 #'
-#' The variable threshold must be less than 0.5 and greater than 0.
+#' The variable threshold must be greater than 0 and less than 0.5.
 #'
-#' @return A list with the following components is returned.
-#' @return \item{concentrationData1}{SpatialPointsDataFrame storing the
-#' geochemical concentrations and locations of each field sample
-#' associated with pdf 1.}
-#' @return \item{censorIndicators1}{Matrix specifying which
-#' samples in \code{concentrationData1} are censored and, if so, have
-#' imputed values. See the description for argument \code{censorIndicators}.}
-#' @return \item{concentrationData2}{Data structure that is equivalent
-#' to concentrationsData1, except that the field samples are associated with
-#' pdf 2.}
-#' @return \item{concentrationData2}{Data structure that is equivalent
-#' to censorIndicators1, except that the field samples are associated with
-#' pdf 2.}
+#' @return A list with two components is returned.
+#' @return \item{gcData1}{List containing the geochemical and related data that
+#' are associated with pdf 1.
+#' This container is described in the package documentation.}
+#' @return \item{gcData2}{List containing the geochemical and related data that
+#' are associated with pdf 2.
+#' This container is described in the package documentation.}
 #'
 #' @examples
 #' \dontrun{
-#' tmp <- splitData(concentrationData, censorIndicators,
-#'                  condProb1, threshold = 0.10 )
+#' theSplits <- splitGcData(gcData, condProb1, threshold = 0.10 )
 #' }
 #'
 #' @export
-splitData <- function(concentrationData, censorIndicators,
-                      condProbs1, threshold = 0.10 ) {
+splitGcData <- function(gcData, condProbs1, threshold = 0.10 ) {
 
   if(threshold <= 0.0 || 0.5 <= threshold)
     stop("Argument threshold must be > 0 and < 0.50.")
@@ -1832,11 +1825,16 @@ splitData <- function(concentrationData, censorIndicators,
   areInPdf1 <- 1.0-threshold <= g & g <= 1.0
   areInPdf2 <- 0.0 <= g & g <= threshold
 
-  return(list(
-    concentrationData1 = concentrationData[areInPdf1, ],
-    censorIndicators1 = censorIndicators[areInPdf1, ],
-    concentrationData2 = concentrationData[areInPdf2, ],
-    censorIndicators2 = censorIndicators[areInPdf2, ]))
+  gcData1 <- list(concData = gcData$concData[areInPdf1, ],
+                 censorIndicators = gcData$censorIndicators[areInPdf1, ],
+                 constSumValue = gcData$constSumValue )
+
+  gcData2 <- list(concData = gcData$concData[areInPdf2, ],
+                 censorIndicators = gcData$censorIndicators[areInPdf2, ],
+                 constSumValue = gcData$constSumValue )
+
+  return( list(gcData1 = gcData1, gcData2 = gcData2))
+
 }
 
 

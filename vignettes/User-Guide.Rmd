@@ -42,17 +42,47 @@ processing results will differ from the results presented in this
 user guide because of the random nature of the calculations. Nonetheless, 
 the general features of your processing results will be the same.
 
-The remainder of the user's guide is divided into X sections:
-[Preliminary steps],
-[Data transformation and analysis], "Cluster computations," "Computation analysis,"
+The remainder of the user's guide is divided into XXXX sections:
+[Structure of the data container],
+[Preparatory steps],
+[Data transformation and analysis], 
+"Cluster computations," "Computation analysis,"
 "Cluster visualization", "Splitting," and "Clustering with modes."
 
-# Preliminary steps
+# Structure of the data container
+
+The geochemical data is organized as a R-language list with three elements.
+
+## First element
+
+The first list element is called "concData", and it contains the geochemical concentrations and related information. The list element is a data container, 
+which is called a `SpatialPointsDataFrame`. This container is defined in the
+"sp" package and was designed specifically for spatial data. 
+A SpatialPointsDataFrame comprises several sub-containers, which are fully described in the sp package documentation. Two sub-containers are 
+especially important here. 
+
+The first sub-container is an R-language data frame that stores
+the geochemical concentrations for each field sample. Each row of this data 
+frame pertains to one field sample, and the name of the row is the name of the
+field sample. Each column pertains to one element, and the name of the column is the abbreviated name of the element (for example, "Al" or "Zn"). So, a row of 
+the data frame comprises all element concentrations for one field 
+sample, and a column of the data frame comprises the concentrations of
+one element for all field samples. 
+
+There are three requirements for the measured concentrations. First, the concentrations must not have any missing values. Second, concentrations that are left-censored (that is, below the lower limit of determination) must be replaced by an imputed concentrations. Finally, all concentrations must have the same units. Typically these units are "mg/kg", which is equivalent to "ppm".
+
+The second sub-container is an R-language matrix that stores the spatial locations of the field samples. Each row of the matix pertains to one field sample and is associated with a corresponding row of the data frame. The matrix has two columns, which store the coordinates of the field samples. The coordinates are typically lattitude and longitude; the coordinates must have the same datum, which is typically the WGS84 datum.
+
+## Second element
+The second list element is called "censorIndicators", and it contains information about the censoring of the measured concentrations. The list element is an R-language array.  The structure of the array is identical to the structure of the data frame containing the concentrations: The array and the data frame have the same number of rows, the same number of columns, the same row names, and the same column names. Consequently, identifying the status of a particular concentration is easy. An array element may have two possible values: "no" meaning that the concentration is not censored and "left" meaning that the original concentration is left-censored and has been replaced by an imputed value.
+
+## Third element
+The third list element is called "constSumValue". Geochemical data sum to a constant value even if some element concentrations are not reported. For geochemical data, the constant sum value typically is 1000000 mg/kg or equivalently 1000000 ppm. In such cases, `constSumValue` equals 1000000.
+
+# Preparatory steps
 
 Create a directory named `Process1`, and set the working directory to 
-`Process1`. Create a file named `ProcessScripts.R`; 
-you will copy the R-language scripts
-from this user guide into this file and then execute them. 
+`Process1`. Create a file named `ProcessScripts.R`; you should copy the R-language scripts from this user guide into this file and then execute them. 
 
 Such a file is valuable
 for at least two reasons. First, the file is a record of how the data
@@ -64,6 +94,7 @@ Copy this code into file `ProcessScript.R` and then execute it.
 ```
 library(GcClust)   # install package GcClust
 library(sp)        # install package sp
+library(maps)       # install package map
 
 nPCs <- 21         # number of principal components
 
@@ -82,41 +113,34 @@ R-language script or the meaning of the variables.
 Variables `nPCs` and `elementOrder` are needed for the processing and
 are fully described later in this guide.
 
-Finally, execute these scripts 
-(but don't add them to file `ProcessingScripts.R`):
+Execute these scripts (but don't add them to file `ProcessingScripts.R`):
 ```
-ugDemo <- CoGeochemData
-save(ugDemo, file="ugDemo.dat")
+gcData <- CoGeochemData
+save(gcData, file="gcData.dat")
 ```
-The first script assigns the Colorado geochemical data to variable `ugDemo`;
-the second script writes `ugDemo` to binary file `ugDemo.dat` in the current directory.
-This operation is strictly unnecessary because these data are available within
-package GcClust. Nonetheless, this operation should be performed so that the processing steps within this guide are as close as possible
-to the steps that you will use when you process your own data.
+The first script assigns the Colorado geochemical data to variable `gcData`.
+The format of variable `gcData` is described in section [Structure of the data container]; additional information about the Colorado geochemical data is available under item "CoGeochemData" within the package Help. The second script writes `gcData` to binary file `gcData.dat` in the current directory. This operation is strictly unnecessary because these data are available within package GcClust. Nonetheless, this operation should be performed so that the processing steps within this guide are as close as possible to the steps that you will use when you process your own data.
 
-Variable `ugDemo` is specially constructed to store geochemical data. It is 
-a R-language list with three components. The first component `concData`
-is a data container, which is a `SpatialPointsDataFrame` defined 
-within the sp package. This container includes
-both the geochemical concentrations for every field sample
-and the geographic coordinates for every field sample. The second 
-component, `censorIndicators`, is a two dimensional character array. Its
-elements are either "left" or "no", which indicate that the associated 
-geochemical concentration is left censored or not censored, respectively. 
-The third component, `kappa`, is the scalar, constant-sum value
-of the geochemical data. Within `ugDemo`, this value is 1000000 mg/kg. 
-Additional information about these three
-components of `ugDemo` is available under item "CoGeochemData" within the 
-package Help.
+To plot the locations of the field samples, copy this code into file `ProcessScript.R` and then execute it. (For the remainder of this guide, these "copy-and-execute" instructions are no long stated.)
+```
+load("gcData.dat")   # Load the binary file with the geochemical data
+
+# plot the state as a gray polygon and then add axes 
+map('state', regions = 'colorado', fill = TRUE, col = "gray60", border = "white")
+map.axes()
+
+# add the sample locations
+plot( gcData$concData, add = TRUE, pch = 16, cex = 1/3, col = "black")
+```
+
+![Figure 1. Sample locations within the state of Colorado.](figures/CoMap.png)
+
+(You will notice that five samples are plotted just outside the northern and eastern borders. The likely cause of this apparent discrepancy is that the coordinate datum for Colorado border with package maps differs from the WGS84 datum for the sample locations.) This simple checks ensures that the data within gcData is in the correct format and is for the state of Colorado.
 
 # Data transformation and analysis
 
-Copy this code into file `ProcessScript.R` and then execute it. (For the
-remainder of this guide, these "copy" and "execute" instructions are no
-long stated.)
+The following code performs the data transformation.
 ```
-load("ugDemo.dat")     # Load the binary file with the geochemical data
-
 # Apply the isometric log-ratio transform and the robust principal components 
 # transform. 
 transData <- transformGcData(ugDemo$concData)
@@ -124,26 +148,15 @@ transData <- transformGcData(ugDemo$concData)
 # Save the transformed data in binary file "TransData.dat"
 save(transData, file = "TransData.dat")     
 ```
-The principal components, which are crucial for the clustering, are stored
-in container `transData` along with other variables.
+The principal components, which are needed for the clustering, are stored in container `transData` along with other variables.
 
-Function `transformGcData` has a second argument `alpha`, which is assigned
-a default value in the above scripts. Argument `alpha` is the fraction of the
-data that is used to calculate the mean vector and the covariance matrix; it
-may range from 0.50 to 1.00. Relative low values, near 0.50, are appropriate
-for data with high measurement error; 
-whereas relatively high values, near 1.00, are appropriate
-for data with low measurement error. There is no formula for selecting a value;
-it is a matter of judgement.
-Our quality control analyses suggest that the geochemical concentrations in `CoGeochemData`, and
-hence in `ugData`, have low measurement error. Consequently, `alpha` is set
-to 0.98, which is its default value.
+Function `transformGcData` has a second argument `alpha`, which is assigned a default value in the above scripts. Argument `alpha` is the fraction of the data that is used to calculate the mean vector and the covariance matrix; it may range from 0.50 to 1.00. Relative low values, near 0.50, are appropriate for data with high measurement error; whereas relatively high values, near 1.00, are appropriate for data with low measurement error. There is no formula for selecting a value; it is a matter of judgement. Our quality control analyses suggest that the geochemical concentrations in `CoGeochemData`, and hence in `gcData`, have low measurement error. Consequently, `alpha` is set to 0.98, which is its default value. 
 
-Within `ugDemo` there are concentrations for 39 elements, so after the transformations there are 38 principal components. That is, the number of elements minus 1 equals the number of principal components.
+Within `gcData` there are concentrations for 39 elements, so after the isometric log-ratio transformation there are 38 components. That is, the number of elements minus 1 equals the number of components. Hence, there are also 38 principal components.
 
-The principal components are now analyzed graphically to ensure that they are properly computed and to select appropriate parameters for the clustering. 
+The principal components are now analyzed graphically to check that they are properly computed and to select appropriate parameters for the clustering. 
 ```
-# plots the correlation matrix and histogram of correlations
+# plot the correlation matrix and histogram of correlations
 plotEdaCorr(transData)
 
 # plot the scree plot
@@ -153,24 +166,31 @@ plotEdaVar(transData)
 plotEdaDist(transData)   
 ```
 
-![Figure. XXX](figures/EdaCorr.png)
+![Figure 2. (upper) Correlation matrix for the principal components. The red diagonal corresponds to the diagonal of the correlation matrix. (lower) Histogram of the correlations.](figures/EdaCorr.png)
 
-The elements of the correlation matrix for the principal components are indexed by the component numbers along the horizontal and vertical axes of the plot. The red diagonal corresponds to the diagonal of the correlation matrix. The plot indicates that the correlations are small, which expected for principal components. The distribution of the correlations is shown with the histogram. The distribution is centered a 0, and extreme tails extend to approximately -0.25 and 0.25. Again, this result is expected. 
+Both the correlation matrix and the histogram (Figure 2)
+indicate that the correlations are small; this property is expected for principal components. As argument `alpha` for function `transformGcData` decreases, the correlations tend to increase slightly. 
 
-![Figure. XXX](figures/EdaVar.png)
+![Figure 3. Scree plot.](figures/EdaVar.png)
 
-The scree plot shows variances associated with each principal component, which are ordered according to decreasing variance. Above each bar is the “cumulative percentage of the total variance.” To understand this quantity, consider the variances for just the first three principal components, namely 1.733, 0.791, and 0.511. The cumulative variances are 1.733, 2.525, and 3.036. These cumulative variances are expressed as percentages of the total variance, which is 4.954. Thus, the cumulative percentages of the total variance are 34.99%, 50.96%, and 61.28%. These cumulative percentages mean that the first component accounts for 34.99% of the total variance, the first and second components for 50.96%, and the first, second, and third components for 61.28%. 
+The scree plot shows variances associated with the principal components. Above each bar is the “cumulative percentage of the total variance.” To understand this quantity, consider the variances for just the first three principal components, namely 1.742, 0.791, and 0.519. The cumulative variances are 1.742, 2.533, and 3.052. These cumulative variances are expressed as percentages of the total variance, which is 4.973. Thus, the cumulative percentages of the total variance are 35.03%, 50.94%, and 61.38%. These cumulative percentages mean that the first component accounts for 35.03% of the total variance, the first and second components for 50.94%, and the first, second, and third components for 61.38%. 
 
-A suitable subset of principal components must be selected for the clustering. Our selection criterion is that the chosen components must account for most of the variance in the data, which is equivalent to most of the information in the data. Thus, the subset always includes the lower-order components, namely component 1, component 2, and so on. The relevant issue is determining the last component in the subset. There is no clear-cut method of resolving this issue, but the cumulative percentage of the total variance is helpful: The higher the cumulative percentage, the greater the amount of information that is used for the clustering. However, if the cummulative percentage is too high, then noise is included in the clustering. Our experience indicates that a suitable percentage ranges from the mid-seventies to the mid-nineties. For this analysis, we use a threshold of 96%, which corresponds to 21 principal components. Consequently, variable `nPCS` is set to 21.
+A suitable subset of principal components must be selected for the clustering. Our selection criterion is that the chosen components must account for most of the variance in the data, which is equivalent to most of the information in the data. Thus, the subset always includes the lower-order components, namely component 1, component 2, and so on. The relevant issue is determining the last component in the subset. There is no clear-cut method of resolving this issue, but the cumulative percentage of the total variance is helpful: The higher the cumulative percentage, the greater the amount of information that is used for the clustering. However, if the cummulative percentage is too high, then noise is included in the clustering. Our experience indicates that a suitable percentage ranges roughly from 75% to 95%. For this analysis, we chose a threshold of 96%, which corresponds to 21 principal components. Consequently, variable `nPCS` is set to 21.
 
-![Figure. XXX](figures/EdaDist.png)
+![Figure 4. (upper) Boxplots and (lower) violinplots of the principal components.](figures/EdaDist.png)
 
-Describe this
+The boxplots and the violinplots (Figure 4) show that the distributions for each component are centered at zero and that the spread of the distributions decreases and the component number increases. This behavior is expected for principal components. The distributions for each component are unimodal.
+
+During the finite mixture modeling, two multivariate normal distributions are fit to the principal components. That is, for one distribution, a mean and a standard deviation are estimated for each component. Likewise, for the other distribution, a mean and a standard deviation are estimated for each component.
+
+Approximate bounds for the estimated means can be determined from the boxplots (Figure 4). For a single component, both the estimated mean for one distribution and the estimated mean for the other distribution must be within the range of the component values. For example, the two estimated means must be between approximately -5.2 and 4.5 for component 1, between approximately -3.5 and 7.4 for component 2, and so on. 
+
+Approximate bounds for the estimated standard deviations can be determined from the scree plot (Figure 3). For a single component, both estimated standard deviations must be less than standard deviation estimated from the scree plot. For example, the two estimated standard deviations must less than 1.32 for component 1, 0.89 for component 2, and so on.
 
 
-# Cluster computations
+# Modeling computations
 
-# Analysis of cluster computations
+# Analysis of computations
 
 ## Check for within-chain label-switching
 
