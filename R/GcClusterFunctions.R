@@ -1019,12 +1019,11 @@ calcObsTestQuantities <- function(transData, nPCS, condProbs1) {
 }
 
 
-#' @title Check model
+#' @title Plot model check --- means and standard deviations
 #'
 #' @description Perform posterior predictive checking of the
 #' finite mixture model. The checks are performed for
-#' the mean vector, the standard deviation vector, and
-#' the correlation matrix for both pdfs in the model.
+#' the mean vector and the standard deviation vector of both pdfs.
 #' The test quantities for the observed data were calculated by function
 #' \code{\link{obsTestQuantities}}. The test quantities for the
 #' replicated data are the Monte Carlo samples for the parameters in the
@@ -1043,16 +1042,8 @@ calcObsTestQuantities <- function(transData, nPCS, condProbs1) {
 #' for which the documentation includes a
 #' complete description of container \code{obsTestQuantities}.
 #'
-#' @param pdf   Index for the pdf in the finite mixture model. It must be
-#' either 1 or 2.
-#' @param testQuantity   The test quantity that will be plotted. It must be
-#' "mean", "sd" (for standard deviations), or "cor" (for the correlation
-#' matrix).
 #' @param intervalPercentage Interval for the distributions of the test
-#' quantity. Typical values might be 50, 90, or 95. Not used when
-#' argument testQuantity is "corr".
-#' @param arePValuesPlotted   Logical variable indicating whether the p-values
-#' are plotted.
+#' quantity. Typical values might be 50, 90, or 95.
 #'
 #' @details
 #' The p-value for the test quantity is defined as the probability that the
@@ -1070,26 +1061,6 @@ calcObsTestQuantities <- function(transData, nPCS, condProbs1) {
 #' (Gelman et al., 2014, p. 148). Consequently, the calculated p-value is
 #' always less than 0.5, and it may be interpreted in the standard way.
 #'
-#' If the testQuantity is either "mean" or "sd", then the p-values are
-#' scaled. The reason is that, if the a p-value is expressed as "0.12",
-#' then four characters are needed to print it. The consequence is that
-#' the p-values, which are printed along the top of the plot, would overlap
-#' one another, making them difficult to read. Instead, the
-#' p-values are multiplied by 100 and then rounded to the nearest whole number.
-#' Consequently the scaled p-values require only two characters to print them.
-#' (There is one exception: If the scaled p-value is 100, then three
-#' characters are needed to print it. But this exception should occur rarely.)
-#'
-#' The plot for the correlation matrix has two parts, which are appear on the
-#' left and the right sides of the graphic. The left side presents a comparison
-#' of the correlation matrices:  Below the diagonal, which is solid red, is
-#' half of the correlation matrix calculated from the field data.
-#' Above the diagonal is half of the correlation matrix, which is the mean
-#' correlation matrix calculated from the Monte Carlo samples.
-#' The right side presents the associated p-values.
-#' The color scale ranges from the smallest calculated p-value to 0.5,
-#' which is the largest possible p-value (based on the previous definition).
-#'
 #' @references
 #' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B.,
 #' Vehtari, A., and Rubin, D.B., 2014, Bayesian data analysis (3rd ed.):
@@ -1097,27 +1068,14 @@ calcObsTestQuantities <- function(transData, nPCS, condProbs1) {
 #'
 #' @examples
 #' \dontrun{
-#' plotTestComparison( combinedChains, obsTestQuantities,
-#'                      pdf = 1, testQuantity = "mean",
-#'                      arePValuesPlotted = TRUE )
-#'
-#' plotTestComparison( combinedChains, obsTestQuantities,
-#'                      pdf = 1, testQuantity = "sd",
-#'                      arePValuesPlotted = TRUE )
-#'
-#' plotTestComparison( combinedChains, obsTestQuantities,
-#'                      pdf = 1, testQuantity = "corr",
-#'                      arePValuesPlotted = TRUE )
+#' plotModelCheck_MS( combinedChains, obsTestQuantities)
 #' }
 #'
 #' @export
-plotTestComparison <- function( combinedChains, obsTestQuantities,
-                                pdf = 1, testQuantity = "mean",
-                                intervalPercentage = 95,
-                                arePValuesPlotted = FALSE ) {
+plotModelCheck_MS <- function( combinedChains, obsTestQuantities,
+                                intervalPercentage = 95) {
 
-  PlotModelCheck <- function( Tobs, Trep, intervalPercentage,
-                              arePValuesPlotted, plotTitle ){
+  Internal1 <- function(Tobs, Trep, intervalPercentage, plotTitle){
 
     nComponents <- ncol(Trep)
     nMcSamples <- nrow(Trep)
@@ -1132,138 +1090,202 @@ plotTestComparison <- function( combinedChains, obsTestQuantities,
       tmp <- sum(Trep[, j] > Tobs[j]) / nMcSamples
       pValues[j] <- ifelse(tmp <= 0.5, tmp, 1-tmp)
     }
-    scaledPValues <- round(pValues*100, digits=0)
+    pValues <- round(pValues, digits=2)
 
     df <- data.frame(x = 1:nComponents,
                      Trep_50 = theQuantiles[, 2],
                      Trep_min = theQuantiles[, 1],
                      Trep_max = theQuantiles[, 3],
                      T_obs = Tobs,
-                     scaledPValues = scaledPValues)
+                     pValues = pValues)
 
     p <- ggplot2::ggplot(df,
                          ggplot2::aes(x = x),
                          environment = environment()) +
       ggplot2::geom_point(ggplot2::aes(y = Tobs),
-                          shape = 16, size = 4, colour="#FF6C91") +
+                          shape = 16, size = 3, colour="#FF6C91") +
       ggplot2::geom_pointrange(ggplot2::aes(y = Trep_50, ymin = Trep_min,
                                             ymax = Trep_max), shape = 3) +
       ggplot2::xlab("Component") +
-      ggplot2::ylab("Transformed concentration (no units)")
+      ggplot2::ylab("Transformed concentration (no units)") +
+      ggplot2::ggtitle(plotTitle)
 
-    if(arePValuesPlotted) {
-
-      p <- p + ggplot2::geom_text(ggplot2::aes(y = max(Trep_max),
-                                               label = scaledPValues),
-                                  size = 3, vjust = 0,
-                                  colour = ifelse(scaledPValues < 10, "red", "black"))
-    }
-    print(p)
+    p <- p + ggplot2::geom_text(ggplot2::aes(y = max(Trep_max),
+                                             label = pValues),
+                                size = 3, vjust = 0, angle = 90,
+                                colour = ifelse(pValues < 0.10, "red", "black"))
+    return(p)
   }
 
-  PlotCorrCheck <- function( obsCorr, repL_Omega, arePValuesPlotted, plotTitle ){
 
-    Internal1 <- function(obsCorr, repCorr) {
-      Y <- apply(repCorr, c(2,3), median)
-      Z <- obsCorr
-      Z[lower.tri(Z)] <- Y[lower.tri(Y)]
-      Z <- reshape2::melt(Z)
-      w <- ggplot2::ggplot(Z, ggplot2::aes(Var2, Var1))+
-        ggplot2::geom_tile(data=Z, ggplot2::aes(fill=value), color="white")+
-        ggplot2::scale_fill_gradient2(low="blue", high="red", mid="white",
-                                      midpoint=0, limit=c(-1,1),
-                                      name="Correlation\n(Pearson)")+
-        ggplot2::xlab("Component") +
-        ggplot2::ylab("Component") +
-        ggplot2::coord_equal()
+  p1 <- Internal1( obsTestQuantities$mu1,
+                   rstan::extract(combinedChains, pars="mu1")$mu1,
+                   intervalPercentage,
+                   plotTitle = "Mean for pdf 1")
+  p2 <- Internal1( obsTestQuantities$tau1,
+                   rstan::extract(combinedChains, pars="tau1")$tau1,
+                   intervalPercentage,
+                   plotTitle = "Sd for pdf 1")
+  p3 <- Internal1( obsTestQuantities$mu2,
+                   rstan::extract(combinedChains, pars="mu2")$mu2,
+                   intervalPercentage,
+                   plotTitle = "Mean for pdf 2")
+  p4 <- Internal1( obsTestQuantities$tau2,
+                   rstan::extract(combinedChains, pars="tau2")$tau2,
+                   intervalPercentage,
+                   plotTitle = "Sd for pdf 2")
 
-      return(w)
-    }
+  grid::grid.newpage()
+  grid::pushViewport(grid::viewport(layout=grid::grid.layout(2,2)))
+  print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
+  print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
+  print(p3, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
+  print(p4, vp=grid::viewport(layout.pos.row=2, layout.pos.col=2))
 
-    Internal2 <- function(obsCorr, repCorr) {
+}
 
-      theDimensions <- dim(repCorr)
-      nMcSamples <- theDimensions[1]
-      M <- theDimensions[2]
+#' @title Plot model check --- correlation matrices
+#'
+#' @description Perform posterior predictive checking of the
+#' finite mixture model. The checks are performed for
+#' the correlation matrices of both pdfs.
+#' The test quantities for the observed data were calculated by function
+#' \code{\link{obsTestQuantities}}. The test quantities for the
+#' replicated data are the Monte Carlo samples for the parameters in the
+#' finite mixture model.
+#' This function plots the test quantities so that they can be compared.
+#'
+#' @param combinedChains
+#' A \code{stanfit} object containg multiple Monte Carlo chains. This
+#' object is return by function \code{\link{combineChains}}, for which the
+#' documentation includes a complete description of container
+#' \code{combinedChains}.
+#'
+#' @param obsTestQuantities
+#' List containing the test quantities for the observed data.
+#' This list is return by function \code{\link{calcObsTestQuantities}},
+#' for which the documentation includes a
+#' complete description of container \code{obsTestQuantities}.
+#'
+#' @details
+#' The p-value for the test quantity is defined as the probability that the
+#' replicated could be more extreme that the observed data, as measured
+#' by the test quantity (Gelman et al., 2014, p. 146). It mathematical
+#' terms,
+#'     pvalue = Pr( T.rep >= T)
+#' where T.rep is the test quantity calculated for the replicated data and
+#' T is the test quantity calculated for the observed data.
+#'
+#' Frequently, the p-value is close to 1 when T is in the left tail of the
+#' distribution for T.rep. This can confuse the interpretation of the p-value.
+#' In such situations, the mathematical definition is modified slightly:
+#'    pvalue = Pr( T.rep < T)
+#' (Gelman et al., 2014, p. 148). Consequently, the calculated p-value is
+#' always less than 0.5, and it may be interpreted in the standard way.
+#'
+#' The plot for the correlation matrix has two parts, which are appear on the
+#' left and the right sides of the graphic. The left side presents a comparison
+#' of the correlation matrices:  Below the diagonal, which is solid red, is
+#' one triangle of the correlation matrix that is calculated from the field data.
+#' Above the diagonal is one triangle of the correlation matrix that is the
+#' mean correlation matrix calculated from the Monte Carlo samples.
+#' The right side presents the associated p-values.
+#' The color scale ranges from the smallest calculated p-value to 0.5,
+#' which is the largest possible p-value (based on the previous definition).
+#'
+#' @references
+#' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B.,
+#' Vehtari, A., and Rubin, D.B., 2014, Bayesian data analysis (3rd ed.):
+#' CRC Press.
+#'
+#' @examples
+#' \dontrun{
+#' plotModelCheck_C(combinedChains, obsTestQuantities)
+#' }
+#'
+#' @export
+plotModelCheck_C <- function( combinedChains, obsTestQuantities) {
 
-      pValues <- matrix(NA_real_, nrow = M, ncol = M )
-      for(i in 1:(M-1)) {
-        for(j in (i+1):M) {
-          tmp <- sum(repCorr[ , i, j ] > obsCorr[i,j]) / nMcSamples
-          pValues[i,j] <- ifelse(tmp <= 0.5, tmp, 1-tmp)
-        }
+  Internal1 <- function(obsCorr, repCorr, plotTitle) {
+    Y <- apply(repCorr, c(2,3), median)
+    Z <- obsCorr
+    Z[lower.tri(Z)] <- Y[lower.tri(Y)]
+    Z <- reshape2::melt(Z)
+    w <- ggplot2::ggplot(Z, ggplot2::aes(Var2, Var1))+
+      ggplot2::geom_tile(data=Z, ggplot2::aes(fill=value), color="white")+
+      ggplot2::scale_fill_gradient2(low="blue", high="red", mid="white",
+                                    midpoint=0, limit=c(-1,1),
+                                    name="Correlation\n(Pearson)")+
+      ggplot2::xlab("Component") +
+      ggplot2::ylab("Component") +
+      ggplot2::coord_equal() +
+      ggplot2::ggtitle(plotTitle)
+
+    return(w)
+  }
+
+  Internal2 <- function(obsCorr, repCorr, plotTitle) {
+
+    theDimensions <- dim(repCorr)
+    nMcSamples <- theDimensions[1]
+    M <- theDimensions[2]
+
+    pValues <- matrix(NA_real_, nrow = M, ncol = M )
+    for(i in 1:(M-1)) {
+      for(j in (i+1):M) {
+        tmp <- sum(repCorr[ , i, j ] > obsCorr[i,j]) / nMcSamples
+        pValues[i,j] <- ifelse(tmp <= 0.5, tmp, 1-tmp)
       }
-
-      Z <- reshape2::melt(pValues)
-      Z <- na.omit(Z)
-
-      w <- ggplot2::ggplot(Z, ggplot2::aes(Var2, Var1))+
-        ggplot2::geom_tile(data=Z, ggplot2::aes(fill=value), color="white")+
-        ggplot2::scale_fill_gradient(limit=c(min(Z$value),0.5),
-                                     high = "#132B43", low = "#56B1F7",
-                                      name="P-value")+
-        ggplot2::xlab("Component") +
-        ggplot2::ylab("Component") +
-        ggplot2::coord_equal()
-
-      return(w)
-
-
     }
 
-    repCorr <- array(NA_real_, dim=dim(repL_Omega) )
-    nMcSamples <- dim(repL_Omega)[1]
+    Z <- reshape2::melt(pValues)
+    Z <- na.omit(Z)
+
+    w <- ggplot2::ggplot(Z, ggplot2::aes(Var2, Var1))+
+      ggplot2::geom_tile(data=Z, ggplot2::aes(fill=value), color="white")+
+      ggplot2::scale_fill_gradient(limit=c(min(Z$value),0.5),
+                                   high = "#132B43", low = "#56B1F7",
+                                   name="P-value")+
+      ggplot2::xlab("Component") +
+      ggplot2::ylab("Component") +
+      ggplot2::coord_equal() +
+      ggplot2::ggtitle(plotTitle)
+
+    return(w)
+  }
+
+  calcCorrMatrixSamples <- function(L_Omega) {
+
+    corrMatrixSamples <- array(NA_real_, dim=dim(L_Omega) )
+    nMcSamples <- dim(L_Omega)[1]
     for(i in 1:nMcSamples) {
-      repCorr[i, , ] <- repL_Omega[i, , ] %*% t(repL_Omega[i, , ])
+      corrMatrixSamples[i, , ] <- L_Omega[i, , ] %*% t(L_Omega[i, , ])
     }
-
-    p1 <- Internal1(obsCorr, repCorr)
-
-    p2 <- Internal2(obsCorr, repCorr)
-
-    grid::grid.newpage()
-    grid::pushViewport(grid::viewport(layout=grid::grid.layout(1,2)))
-    print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
-    print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
-
+    return(corrMatrixSamples)
   }
 
-  if(pdf == 1 && testQuantity == "mean") {
-    PlotModelCheck( obsTestQuantities$mu1,
-                    rstan::extract(combinedChains, pars="mu1")$mu1,
-                    intervalPercentage, arePValuesPlotted,
-                    plotTitle = "Mean for pdf 1")
-  } else if(pdf == 1 && testQuantity == "sd") {
-    PlotModelCheck( obsTestQuantities$tau1,
-                    rstan::extract(combinedChains, pars="tau1")$tau1,
-                    intervalPercentage, arePValuesPlotted,
-                    plotTitle = "Sd for pdf 1")
-  } else if(pdf == 1 && testQuantity == "corr") {
-    PlotCorrCheck( obsTestQuantities$Corr1,
-                  rstan::extract(combinedChains, pars="L_Omega1")$L_Omega1,
-                  arePValuesPlotted,
-                  plotTitle = "Correlation for pdf 1")
-  } else if(pdf == 2 && testQuantity == "mean") {
-    PlotModelCheck( obsTestQuantities$mu2,
-                    rstan::extract(combinedChains, pars="mu2")$mu2,
-                    intervalPercentage, arePValuesPlotted,
-                    plotTitle = "Mean for pdf 2")
-  } else if(pdf == 2 && testQuantity == "sd") {
-    PlotModelCheck( obsTestQuantities$tau2,
-                    rstan::extract(combinedChains, pars="tau2")$tau2,
-                    intervalPercentage, arePValuesPlotted,
-                    plotTitle = "Sd for pdf 2")
-  } else if(pdf == 2 && testQuantity == "corr") {
-    PlotCorrCheck( obsTestQuantities$Corr2,
-                  rstan::extract(combinedChains, pars="L_Omega2")$L_Omega2,
-                  arePValuesPlotted,
-                  plotTitle = "Correlation for pdf 2")
-  } else {
-    msg <- paste( "Argument pdf must be 1 or 2, ",
-                  "and argument testQuantity must be ",
-                  "mean, sd, or corr.", sep="")
-    stop(msg)
-  }
+  L_Omega1 <- rstan::extract(combinedChains, pars="L_Omega1")$L_Omega1
+  corrMatrixSamples <- calcCorrMatrixSamples(L_Omega1)
+
+  p1 <- Internal1(obsTestQuantities$Corr1, corrMatrixSamples,
+                  "Correlation matrices for pdf 1")
+  p2 <- Internal2(obsTestQuantities$Corr1, corrMatrixSamples,
+                  "P-values, pdf 1" )
+
+  L_Omega2 <- rstan::extract(combinedChains, pars="L_Omega2")$L_Omega2
+  corrMatrixSamples <- calcCorrMatrixSamples(L_Omega2)
+
+  p3 <- Internal1(obsTestQuantities$Corr2, corrMatrixSamples,
+                  "Correlation matrices for pdf 2")
+  p4 <- Internal2(obsTestQuantities$Corr2, corrMatrixSamples,
+                  "P-values, pdf 2" )
+
+  grid::grid.newpage()
+  grid::pushViewport(grid::viewport(layout=grid::grid.layout(2,2)))
+  print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
+  print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
+  print(p3, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
+  print(p4, vp=grid::viewport(layout.pos.row=2, layout.pos.col=2))
 
 }
 
