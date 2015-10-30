@@ -18,7 +18,7 @@ the functions in package GcClust and how to evaluate the results returned by
 those functions. 
 
 The scope of this user guided is limited. It does not provide detailed 
-descriptions of the function because this information is available with the
+descriptions of the function because this information is available in the
 package Help. It does not describe the mathematics, which is the basis
 for many functions; this description will be published separately. Finally, it
 does not provide any information about the geochemical interpretation of 
@@ -46,7 +46,8 @@ The remainder of the user's guide is divided into XXXX sections:
 [Structure of the data container],
 [Preparatory steps],
 [Data transformation and analysis], 
-"Cluster computations," "Computation analysis,"
+[Sampling of the posterior probability density function],
+"Computation analysis,"
 "Cluster visualization", "Splitting," and "Clustering with modes."
 
 # Structure of the data container
@@ -179,16 +180,26 @@ A suitable subset of principal components must be selected for the clustering. O
 
 ![Figure 4. (upper) Boxplots and (lower) violinplots of the principal components.](figures/EdaDist.png)
 
-The boxplots and the violinplots (Figure 4) show that the distributions for each component are centered at zero and that the spread of the distributions decreases and the component number increases. This behavior is expected for principal components. The distributions for each component are unimodal.
+The boxplots and the violinplots (Figure 4) show that the distributions for each component are centered at zero and that the spread of the distributions decreases as the component number increases. This behavior is expected for principal components. The distributions for each component are unimodal.
 
-During the finite mixture modeling, two multivariate normal distributions are fit to the principal components. That is, for one distribution, a mean and a standard deviation are estimated for each component. Likewise, for the other distribution, a mean and a standard deviation are estimated for each component.
+During the finite mixture modeling, two multivariate normal distributions are fit to the principal components. That is, for one distribution, a mean and a standard deviation are estimated for each component, and a correlation matrix is estimated for all components. For the other distribution, the same statistics are calculated. 
 
-Approximate bounds for the estimated means can be determined from the boxplots (Figure 4). For a single component, both the estimated mean for one distribution and the estimated mean for the other distribution must be within the range of the component values. For example, the two estimated means must be between approximately -5.2 and 4.5 for component 1, between approximately -3.5 and 7.4 for component 2, and so on. 
+Consider the violinplot plot for component 1. The highest densities range from approximately -2.5 to 2.5, so the two means for this component are probably within this range. The two standard deviation associated with these two means are much harder to estimate. Nonetheless, it is possible to estimate a very rough upper bound: Whatever the value of the two means, the standard deviations will be smaller than the entire range of the data, which is about 9.2. In our experience, the standard deviations are usually less then half the range of the data, which would be about 4.6.
 
-Approximate bounds for the estimated standard deviations can be determined from the scree plot (Figure 3). For a single component, both estimated standard deviations must be less than standard deviation estimated from the scree plot. For example, the two estimated standard deviations must less than 1.32 for component 1, 0.89 for component 2, and so on.
+# Sampling of the posterior probability density function
+The sampling of the posterior probability density function is performed with the following code.
+```
+samplePars <- sampleFmm(transData, nPCs,
+                        nSamplesPerChain = 1000,
+                        nChainsPerCore = 5, nCpuCores = 7, procDir = ".")
 
+save(samplePars, file = "SamplePars.dat")
+```
+Function argument `nCpuCores` specifies that 7 processor (central processing units) cores will be requested from the operating system. Of course, the number of processor that you request must be less than or equal to the number on your computer. Function argument `nChainsPerCore` specifies that 5 separate sampling chains will be computed by each core. So, a total of 35 chains are computed. 
 
-# Modeling computations
+The chains are not returned by function `sampleFmm` because they would require too much memory. Instead, the chains are written to the computer disk in the directory specified by argument `procDir`. The file names have the format 
+
+BEGIN HERE
 
 # Analysis of computations
 

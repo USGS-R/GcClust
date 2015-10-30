@@ -1606,11 +1606,11 @@ plotCompMeans <- function(simplexModPar, elementOrder, symbolSize = 2) {
 #' the plot. The choices are either "spectrum" (default) and "rainbow."
 #'
 #' @details
-#' In the plot, the upper left side represents one triangle from the
-#' variation matrix for pdf 1, and the lower right side represents one triangle
+#' In the plot, the upper triangle is the upper triangle from the
+#' variation matrix for pdf 1, and the lower triange is the lower triangle
 #' from the variation matrix for pdf 2.
 #'
-#' The pixels in the plot represent scaled variances of the log-ratios
+#' The pixels represent scaled variances of the log-ratios
 #' between the respective chemical elements. The scaling is desirable because
 #' it reduces the large range of the variances, making it easier to
 #' visualize all of the variances together. The scaling function is the
@@ -1630,7 +1630,8 @@ plotCompMeans <- function(simplexModPar, elementOrder, symbolSize = 2) {
 plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
                                 colorScale = "spectrum" ) {
 
-  D <- dim(simplexModPar$varMatrix1)[3]  # D is the standard notation, and is concise.
+  # D is the standard notation, and is concise.
+  D <- dim(simplexModPar$varMatrix1)[3]
 
 
   medVarMatrix1 <- apply(simplexModPar$varMatrix1, c(2,3), median)
@@ -1644,6 +1645,15 @@ plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
   Z[upper.tri(Z)] <- medVarMatrix1[upper.tri(medVarMatrix1)]
   Z[lower.tri(Z)] <- medVarMatrix2[lower.tri(medVarMatrix2)]
 
+  # If matrix Z were plotted in its current configuration,
+  # the first row would be at the bottom, the second row
+  # would be the second from the bottom, and so on. Consequently,
+  # the diagonal would extend from the lower-left corner to the
+  # upper-right corner. So, the matrix is plotted in an unfamilar way.
+  #
+  # The problem is corrected by reversing the rows.
+  Z <- Z[rev(rownames(Z)),]
+
   Z <- sqrt(Z)
 
   Z <- reshape2::melt(Z)
@@ -1651,7 +1661,7 @@ plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
 
   w <- ggplot2::ggplot(Z, ggplot2::aes(Var2, Var1)) +
     ggplot2::geom_tile(data=Z, ggplot2::aes(fill=value), color="white") +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle=90,colour = "black")) +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle=90,vjust=0.25,colour = "black")) +
     ggplot2::theme(axis.text.y = ggplot2::element_text(colour = "black")) +
     ggplot2::theme(panel.background = ggplot2::element_blank()) +
     ggplot2::theme(panel.grid.major = ggplot2::element_blank()) +
