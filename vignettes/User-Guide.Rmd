@@ -1,5 +1,5 @@
 ---
-title: "User guide for library GcClust"
+title: "User's guide for package GcClust"
 author: "Karl J. Ellefsen and David B. Smith"
 date: "`r Sys.Date()`"
 output: 
@@ -12,19 +12,18 @@ vignette: >
 ---
 
 # Introduction
-This user guide describes how library GcClust is used to cluster 
+This user's guide describes how package GcClust is used to cluster 
 regional geochemical data. To this end, this guide describes how to use
 the functions in package GcClust and how to evaluate the results returned by
 those functions. 
 
-The scope of this user guided is limited. It does not provide detailed 
+The scope of this user's guided is limited. It does not provide detailed 
 descriptions of the function because this information is available in the
-package Help. It does not describe the mathematics, which is the basis
-for many functions; this description will be published separately. Finally, it
+package Help. It does not describe the mathematics of the finite mixture model; this description will be published separately. It does not describe Bayesian data analysis, including Monte Carlo sampling; you are assumed to be familar with these methods. Finally, it
 does not provide any information about the geochemical interpretation of 
 clusters.
 
-The goals of this user guide are most readily achieved by showing the 
+The goals of this user's guide are most readily achieved by showing the 
 step-by-step processing of a data set, so this package includes a 
 regional geochemical data set.
 The data set comprises measurements of 959 soil samples that were collected in 
@@ -33,24 +32,24 @@ the measurements
 include the chemical concentrations of 39 elements. Additional information
 about these data are listed under "CoGeochemData" in the package Help.
 
-This user guide includes R-language scripts that are used to cluster the
+This user's guide includes R-language scripts that are used to cluster the
 Colorado data. We highly recommend that you copy these scripts into a
 file and execute the scripts. This effort will
 help you become familar with the processing and its analysis. Some details 
 of your
 processing results will differ from the results presented in this
-user guide because of the random nature of the calculations. Nonetheless, 
+user's guide because of the random nature of the calculations. Nonetheless, 
 the general features of your processing results will be the same.
 
-The remainder of the user's guide is divided into XXXX sections:
-[Structure of the data container],
+The remainder of the user's guide is divided into 8 sections:
+[Organization of the geochemical data],
 [Preparatory steps],
 [Data transformation and analysis], 
-[Sampling of the posterior probability density function],
-"Computation analysis,"
-"Cluster visualization", "Splitting," and "Clustering with modes."
+[Sampling the posterior probability density function],
+[Analysis and processing of the Monte Carlo samples],
+[Cluster visualization], "Splitting the data" and [References].
 
-# Structure of the data container
+# Organization of the geochemical data
 
 The geochemical data is organized as a R-language list with three elements.
 
@@ -93,9 +92,10 @@ in the file is editted --- the other scripts remain unchanged.
 
 Copy this code into file `ProcessScript.R` and then execute it.
 ```
-library(GcClust)   # install package GcClust
-library(sp)        # install package sp
-library(maps)       # install package map
+library(GcClust)   
+library(sp)        
+library(maps)      
+library(shinystan) 
 
 nPCs <- 21         # number of principal components
 
@@ -110,17 +110,14 @@ elementOrder <- c( "Sr", "U", "Y", "Nb", "La",
                    "S",  "Sb", "Tl", "W")
 ```
 The comments, which are preceded by `#`, describe either the purpose of the
-R-language script or the meaning of the variables.
-Variables `nPCs` and `elementOrder` are needed for the processing and
-are fully described later in this guide.
+R-language script or the meaning of the variables. Variables `nPCs` and `elementOrder` are needed for the processing and are fully described later in this guide.
 
 Execute these scripts (but don't add them to file `ProcessingScripts.R`):
 ```
 gcData <- CoGeochemData
 save(gcData, file="gcData.dat")
 ```
-The first script assigns the Colorado geochemical data to variable `gcData`.
-The format of variable `gcData` is described in section [Structure of the data container]; additional information about the Colorado geochemical data is available under item "CoGeochemData" within the package Help. The second script writes `gcData` to binary file `gcData.dat` in the current directory. This operation is strictly unnecessary because these data are available within package GcClust. Nonetheless, this operation should be performed so that the processing steps within this guide are as close as possible to the steps that you will use when you process your own data.
+The first script assigns the Colorado geochemical data to variable `gcData`. The format of variable `gcData` is described in section [Organization of the geochemical data]; additional information about the Colorado geochemical data is available under item "CoGeochemData" within the package Help. The second script writes `gcData` to binary file `gcData.dat` in the current directory. This operation is strictly unnecessary because these data are available within package GcClust. Nonetheless, this operation should be performed so that the processing steps within this guide are as close as possible to the steps that you will use when you process your own data.
 
 To plot the locations of the field samples, copy this code into file `ProcessScript.R` and then execute it. (For the remainder of this guide, these "copy-and-execute" instructions are no long stated.)
 ```
@@ -136,7 +133,7 @@ plot( gcData$concData, add = TRUE, pch = 16, cex = 1/3, col = "black")
 
 ![Figure 1. Sample locations within the state of Colorado.](figures/CoMap.png)
 
-(You will notice that five samples are plotted just outside the northern and eastern borders. The likely cause of this apparent discrepancy is that the coordinate datum for Colorado border with package maps differs from the WGS84 datum for the sample locations.) This simple checks ensures that the data within gcData is in the correct format and is for the state of Colorado.
+(You will notice that five samples are plotted just outside the northern and eastern borders. The likely cause of this discrepancy is that the datum for the coordinates of the border, which are specified within package maps, differs from the WGS84 datum for the sample locations. This descrepancy is minor and has no effect on the processing.) Such a plot ensures that the data pertains to the area of interest.
 
 # Data transformation and analysis
 
@@ -182,64 +179,132 @@ A suitable subset of principal components must be selected for the clustering. O
 
 The boxplots and the violinplots (Figure 4) show that the distributions for each component are centered at zero and that the spread of the distributions decreases as the component number increases. This behavior is expected for principal components. The distributions for each component are unimodal.
 
-During the finite mixture modeling, two multivariate normal distributions are fit to the principal components. That is, for one distribution, a mean and a standard deviation are estimated for each component, and a correlation matrix is estimated for all components. For the other distribution, the same statistics are calculated. 
-
-Consider the violinplot plot for component 1. The highest densities range from approximately -2.5 to 2.5, so the two means for this component are probably within this range. The two standard deviation associated with these two means are much harder to estimate. Nonetheless, it is possible to estimate a very rough upper bound: Whatever the value of the two means, the standard deviations will be smaller than the entire range of the data, which is about 9.2. In our experience, the standard deviations are usually less then half the range of the data, which would be about 4.6.
-
-# Sampling of the posterior probability density function
-The sampling of the posterior probability density function is performed with the following code.
+# Sampling the posterior probability density function
+The sampling of the posterior probability density function (pdf) is performed with the following code.
 ```
-samplePars <- sampleFmm(transData, nPCs,
-                        nSamplesPerChain = 1000,
-                        nChainsPerCore = 5, nCpuCores = 7, procDir = ".")
+samplePars <- sampleFmm(transData, nPCs, 
+                        nChainsPerCore = 5, nCpuCores = 7)
 
 save(samplePars, file = "SamplePars.dat")
 ```
-Function argument `nCpuCores` specifies that 7 processor (central processing units) cores will be requested from the operating system. Of course, the number of processor that you request must be less than or equal to the number on your computer. Function argument `nChainsPerCore` specifies that 5 separate sampling chains will be computed by each core. So, a total of 35 chains are computed. 
+Function argument `nCpuCores` specifies that 7 central processing unit (cpu) cores will be requested from the operating system. Of course, the number of processor that you request must be less than or equal to the number on your computer. Function argument `nChainsPerCore` specifies that 5 separate sampling chains will be computed by each core. So, a total of 35 chains are computed. Our experience is that many chains are needed because there may be multiple modes, and that approximately 35 chains is adequate.
 
-The chains are not returned by function `sampleFmm` because they would require too much memory. Instead, the chains are written to the computer disk in the directory specified by argument `procDir`. The file names have the format 
+The chains are not returned by function `sampleFmm` because they would require too much memory. Instead, the chains are written to the computer disk in the directory specified by argument `procDir`. The file names have the form "RawSamples?-?.dat"; the first and second question marks are replaced by the processor number and the chain number respectively.
 
-BEGIN HERE
+The time that function `sampleFmm` needs to complete computations depends upon many factors including the number of chains for each processor and the number of  field samples. When we processed these data, the time was approximately one hour.
 
-# Analysis of computations
+# Analysis and processing of the Monte Carlo samples
 
-## Check for within-chain label-switching
+## Checking parameter traces for each chain
 
-## Select the chains and their switching
+The analysis of the Monte Carlo samples begins by checking the parameter traces for each chain.  The number of model parameters, and hence the number of parameter traces, equals $N^2 + 3N + 1$ where $N$ is the number of principal components. For the example in this vignette, the number of principal components is 21, so the number of parameter traces is 505. Examining 505 parameter traces for 35 chains would be overwhelming, so only a subset of 5 parameter traces is examined for each chain. The 5 model parameters are theta, element 1 of the mean vector for pdf 1, element 1 of the mean vector for pdf 2, element 1 of the standard deviation vector for pdf 1, and element 1 of the standard deviation vector for pdf 2. These 5 parameter traces are plotted 
+for all 35 chains with the following code
+```
+plotSelectedTraces(samplePars)
+```
 
-plotPointStats
+![Figure 5. Traces for (upper) theta, (middle) element 1 of the two mean vectors, and (lower) element 1 of the two standard deviation vectors. These traces pertain to chain 1.](figures/SelectedTraces.png)
 
-Sometimes, but infrequently, the samples of the posterior pdf
-are poorly representative a mode. For example, samples in short sections of
-a trace may differ enormously from samples in other sections. The point
-statistics for this trace differ
-enormously from the point statistics for corresponding traces for other
-chains.
+Each trace should appear stationary---the trace should consist of random fluctuations having a constant mean and a constant standard deviation. The two traces for element 1 of two mean vectors should not switch with one another. Likewise, the two traces for element 1 of two standard deviation vectors should not switch with one another. If the traces do not satisfy these criteria, then the sampling of the posterior pdf must be modified. The modification are described in the documentation for function `sampleFmm`.
 
-If such spurious point statistics are used to calculate
-plot ranges, then the resulting plot is difficult to analyze. To prevent this
-problem, the spurious point statistics are not used to calculate the
-plot ranges. The exclusion applies to all point statistics for the
-associated chain, and the
-chains are desigated by argument \code{excludedChains}. The resulting
-plot will include the spurious point statistics, if it is within the plot
-range.
+You may notice switching between chains: For example, theta could be 0.42 for chain 1 and 0.58 for chain 2. Associated with this switch in theta, there are correspond switches for the other 4 model parameters. Such switching is common and normal. 
+
+## Selecting the chains
+
+Another component of the analysis is checking point statistics for the model parameters for every chain. Again, for the example in this vignette, there are 505 model parameters, and examining point statistics for these 505 parameters would overwhelming. So, a subset is examined; the subset comprises the 5 model parameters that were discussed in the previous section and natural logarithm of the likelihood. These statistics are plotted with the following code
+```
+plotPointStats(samplePars)
+```
+
+![Figure 6. Point statistics (upper left) for element 1 of the mean vectors for the two pdfs, (upper right) for element 1 of the standard deviation vectors for the two pdfs, (lower left) theta, and (lower right) log-likelihood. A dot represents the median, and the vertical line represents the 95% credible interval. Blue and red represent pdfs 1 and 2, respectively.  intervals](figures/PointStats.png)
+
+Examine the point statistics for the log-likelihood. The median log-likelihoods are either approximately -7420 or -7500. This result suggests that two modes in the posterior pdf were sampled. The log-likelihood indicates how well the model fits the data---higher values indicate a better fit than lower value do. Consequently, any chain except 22 and 26 could be selected for further analysis. For this example, chains 1, 2, 3, and 4 are selected.
+
+The number of selected chains should range between 2 and 4. If there is just 1 chain, then the statistics that are used to check convergence (which is discussed later) are unreliable. Five or more chains provides little additional information. We try to use 4 chains.
+
+Now examine the point statistics for theta. For chains 1, 2, 3, and 4, the median values are approximately 0.56, 0.56, 0.56, and 0.44. This result indicates that chain 4 is switched relative to the other three. This switch is apparent also in the point statistics for element 1 of the mean vectors and element 1 of the standard deviation vectors. 
+
+On rare occasions, the samples for a chain are are poorly representative a mode, and the point statistics differ enormously from corresponding point statistics for other chains. To include the point statistics for all chains in a plot, the range for the vertical axis must be expanded, making it difficult to analyze the statistics. To overcome this difficulty, the spurious point statistics are excluded from the range calculation using argument `excludedChains`.
+
+## Combining the selected chains
+
+In the previous section, we selected chains 1, 2, 3, and 4, and we determined that chain 4 must be switched so that it conforms to the other three chains. A simple way to archive this information is to store it in a common-separated value file:
+```
+Chain,isSwitched
+1,F
+2,F
+3,F
+4,T
+```
+The file consists of two columns. The first column specifies the number of the chain that is selected, and the second column specifies whether the parameters in the chain are switched. "T" (TRUE) indicates that they are switched; "F" (FALSE) indicates that they are not. 
+
+The following code reads the common-separated value file, switches the chains if needed, and then combines them.
+```
+selectedChains <- read.csv("SelectedChains.csv", header = TRUE,
+                           stringsAsFactors = FALSE)
+combinedChains <- combineChains(samplePars, selectedChains)
+save(combinedChains, file = "CombinedChains.dat")
+```
+The returned object `combinedChains` contains the 4 selected chains, using the format specfied by the rstan library.
+
+## Checking convergence
+
+The convergence of the Monte Carlo sampling is evaluated with another package called "stanstan". The following code launches an application in your web browser.
+```
+launch_shinystan(combinedChains)
+```
+With this application, you can view various graphical and statistical summaries that indicate how well the sampling converged. Interpretation of these summaries is beyond the scope of the vignette; information on topic is available in Hoffman and Gelman (2013), Gelman et al. (2014, p. 281-288) and Stan Development Team (2015). Limited information is available within application shinystan.
+
+## Checking the model
+
+The mean vectors, the standard deviation vectors, and the correlation matrices for the two pdfs in the finite mixture model may be checked by comparing them to equivalent statistics calculated from the principal components. To this end, it is necessary to calculate the conditional probability that a field sample is associated with pdf 1 in the finite mixture model. This calculation is performed with the following code.
+```
+condProbs1 <- calcCondProbs1(transData, nPCs, combinedChains)
+save(condProbs1, file = "CondProbs1.dat")
+```
+Container `condProbs1` is a matrix containing the Monte Carlo samples of the conditional probabilites and is described further in the package Help. 
+
+These conditional probabilites, along with the principal components, are used to calculate the the mean vectors, the standard deviation vectors, and the correlation matrices for the both pdfs in the finite mixture model. These statistics are called "observed test statistics" (Gelman et al., 2014, p. 145-146) because they are calculated from the observed data. This calculation is performed with the following code.
+```
+obsTestStats <- calcObsTestStats(transData, nPCS, condProbs1)
+save(obsTestStats, file = "ObsTestStats.dat")
+```
+
+For Bayesian model checking, the observed test statistics are compared to replicated test statistics (Gelman et al., 2014, p. 143-153), which are derived from the samples of posterior pdf. For this application, the replicated test statistics are just the Monte Carlo samples of the mean vectors, the standard deviation vectors, and the correlation matrices. The comparison is chosen to be graphical. For the vectors, the comparison is performed with the following code.
+```
+plotModelCheck_MS(combinedChains, obsTestQuantities)
+```
+
+![Figure 7. Model check of (upper row) the mean vectors and (lower row) the standard devation vectors. A red dot represents an observed test statistic. A horizontal black line represents the median of associated Monte Carlo samples, and the vertical line represents its 95% credible interval. The numbers along the top of each plot are the p-values.](figures/Check_MS.png)
+
+In Figure 7, the distribution of the Monte Carlo samples for one model parameter (for example, component 1 of the mean vector for pdf 1) is summarized by the median and the 95% credible interval. The associated test statistic should be within the 95% credible interval, and ideally it should be close to the median. That is, the red dot should be within the interval defined by the vertical black line, and ideally it should be close to the horizonal black line. The p-values are explained later in this section.
 
 
-The number of chains that should be combined is about 4.
+For the correlation matrices, the comparison between the test statistics is performed with the following code.
+```
+plotModelCheck_C(combinedChains, obsTestQuantities)
+```
 
-## Combine the selected chains
+![Figure 8. Model check for the correlation matrices. (upper left) Comparison of the observed test statistic (above the red diagonal) to the replicated test statistic (below the red diagonal) for pdf 1. (upper right) Associated p-values for pdf 1. (lower left and lower right) Corresponding graphics for pdf 2.](figures/Check_C.png)
 
+In Figure 8 (upper left), the replicated test statistic for, say, the correlation between components 5 and 2 is the median of the associated Monte Carlo samples. Figure 8 (upper right) shows the associated p-values, which are explained next. The color scale ranges from the smallest p-value to 0.5,
+which is the largest possible p-value.
 
-## Check convergence
+A measure of the discrepancy between the observed test statistic and the replicated test statistic is the posterior predictive p-value (Gelman et al., 2014, p. 146). It is defined as the probability that the replicated test statistic could be more extreme that the observed test statistic. It mathematical terms, $p = Pr( T_r \geq T_o)$ where $T_r$ is the replicated test statistic and $T_o$ is the observed test statistic. When $T_o$ is in the left tail of the distribution for $T_r$, the p-value is close to 1. This situation can confuse the interpretation of the p-value. So, the mathematical definition is modified slightly: $p = Pr( T_r \leq T_o)$ (Gelman et al., 2014, p. 148). Consequently, the calculated p-value is always less than 0.5. and it may be interpreted in the standard way.
 
-## Check the model
+For this model check, all p-values (Figures 7 and 8) are moderate to large, indicating that the discrepancy between the test statistics is small. If there are many p-values that are less than approximately 0.1, the model may have difficiencies that require evaluation.
 
-# Back transform to concentrations
+## Transforming back to the simplex
+
+For each pdf in the finite mixture model, the samples of its mean vector, its standard deviation vector, and its correlation matrix are transformed to equivalent quantities in the simplex---namely, samples of the compositional mean vector and the variation matrix. This transformation is performed with the following code.
+```
+simplexModPar <- backTransform(gcData, nPCs, transData, combinedChains)
+save( simplexModPar, file = "SimplexModPar.dat")
+```
 
 # Cluster visualization
 
-## Calculate simplex stats
+## Calculating simplex statistics
 Why?
 What statistics
 
@@ -247,17 +312,31 @@ What statistics
 simplexStats <- calcSimplexStats(demoD$concData, demoD$kappa)
 save(simplexStats, file = "SimplexStats.dat")
 ```
-
+## Plotting the compositional mean
 
 The plot depends stongly upon the set of geochemical concentrations
 that are used to compute the standardization. Only those plots using the same standardization can be compared. This situation commonly occurs when the standardization is based on the field samples from the entire survey area. 
+
+
+## Plotting the variation matrix
+
+## Plotting the clusters
 
 plotProbMap
 The symbol colors, symbol sizes, and symbol type have been chosen so that the symbols are easily perceived when they are plotted on a gray background. Be careful when changing these parameters!
 The default values work well, so the occasions to change them should be rare.
 
 
-# Splitting the data set
+# Splitting the geochemical data
+
+When do we stop??
+
+# References
+Hoffman, M., and Gelman, A., 2013, The no-U-turn sampler-Adaptively setting path lengths in Hamiltonian Monte Carlo, available on line at http://arxiv.org/abs/1111.4246 (last accessed November 2015).
+
+Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B., Vehtari, A., and Rubin, D.B., 2014, Bayesian data analysis (3rd ed.), CRC Press.
+
+Stan Development Team, 2015, Stan Modeling Language - User’s Guide and Reference Manual, Version 2.8.0, available on line at http://mc-stan.org/ (last accessed October 2015).
 
 
 ---

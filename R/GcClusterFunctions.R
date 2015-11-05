@@ -329,7 +329,8 @@ plotEdaCorr <- function(transData) {
 #'                      finite mixture model (See Details).
 #' @param tauBounds     Vector of length 2, containing the lower and upper
 #'                      bounds for tau (See Details).
-#' @param nSamplesPerChain  Number of samples in each chain (See details).
+#' @param nWuSamples    Number of warm-up samples in each chain (See details).
+#' @param nPwuSamples   Number of post warm-up samples in each chain (See details).
 #' @param nChainsPerCore Number of chains that each core computes (See Details).
 #' @param nCpuCores     Number of central processing units (cpu's) that are
 #'                      used (See Details).
@@ -361,7 +362,7 @@ plotEdaCorr <- function(transData) {
 #' parallel computations are organized in the following manner:
 #' \code{nCpuCores} cpu's
 #' are requested from the operating system; each cpu computes
-#' \code{nchainsPerCore} individual chains, and each chain is written
+#' \code{nChainsPerCore} individual chains, and each chain is written
 #' to its own file in directory \code{procDir}.
 #'
 #' @return The returned values may be conveniently divided into two groups.
@@ -385,11 +386,14 @@ plotEdaCorr <- function(transData) {
 #'
 #' Second, a list with 4 elements is returned by the function:
 #' @return \item{nChains}{Number of chains.}
+#' @return \item{nWuSamples}{Number of warm-up samples.}
+#' @return \item{nPwuSamples}{Number of post warm-up samples.}
 #' @return \item{nSamplesPerChain}{See argument \code{nSamplesPerChain}.}
-#' @return \item{nSamplesPWU}{Number of samples, post warm-up. This
-#' number is one-half of \code{nSamplesPerChain}.}
 #' @return \item{fileNames}{Vector containing the names of the files
 #' with the \code{stanfit} objects.}
+#'
+#' The total number of samples per chain equals \code{nWuSamples} plus
+#' \code{nPwuSamples}. Only the post warm-up samples are used for interference.
 #'
 #' @references
 #' Gelman, A., Carlin, J.B., Stern, H.S., Dunson, D.B., Vehtari, A.,
@@ -407,26 +411,27 @@ plotEdaCorr <- function(transData) {
 #'
 #' @examples
 #' \dontrun{
-#' fmmSamples <- sampleFmm(transData, nPCs, tauBounds = c(0.001,20),
+#' fmmSamples <- sampleFmm(transData, nPCs,
 #'                         nCpuCores = 7, nChainsPerCore = 5,
 #'                         procDir = "Process121")
 #' }
 #'
 #' @export
 sampleFmm <- function(transData, nPCs,
-                      nSamplesPerChain = 1000,
+                      nWuSamples = 500,
+                      nPwuSamples = 500,
                       nChainsPerCore = 2,
                       nCpuCores = parallel::detectCores(),
                       procDir = ".") {
 
 
-  rstanParallelSampler <- function(stanData, nSamplesPerChain,
+  rstanParallelSampler <- function(stanData, nWuSamples, nPwuSamples,
                                    nChainsPerCore, nCpuCores, procDir ) {
 
     CL <- parallel::makeCluster(nCpuCores)
 
     parallel::clusterExport(cl = CL,
-                            c("stanData", "nSamplesPerChain",
+                            c("stanData", "nWuSamples", "nPwuSamples",
                               "nChainsPerCore", "procDir"),
                             envir=environment())
 
@@ -442,6 +447,21 @@ sampleFmm <- function(transData, nPCs,
       for(i in 1:nChainsPerCore) {
 
         rng_seed <- sample.int(.Machine$integer.max,1)
+
+        gen_inits <- function() {
+          areInGrp1 <- sample(c(TRUE,FALSE), size = stanData$N,
+                              prob = c(0.3, 0.7), replace = TRUE)
+          return(list(
+            theta = runif(1, min = 0.35, max = 0.65),
+            mu1 = apply(stanData$Z[areInGrp1,], 2, mean ),
+            mu2 = apply(stanData$Z[!areInGrp1,], 2, mean ),
+            tau1 = apply(stanData$Z[areInGrp1,], 2, sd ),
+            tau2 = apply(stanData$Z[!areInGrp1,], 2, sd ),
+            L_Omega1 = diag(stanData$M),
+            L_Omega2 = diag(stanData$M)
+          ))
+        }
+
 
         # Sampling from finite mixture model can be difficult --- the chains
         # tend to get stuck. I have read two different suggestions in the
@@ -482,28 +502,16 @@ sampleFmm <- function(transData, nPCs,
         # suggestion, so I suspect that he doesn't favor it. In some tests,
         # I found that the initial values of the chains (for a particular
         # parameter) were identical. This behavior is expected because
-        # init = "0". Perhaps init = "random"
-
-        gen_inits <- function() {
-          areInGrp1 <- sample(c(TRUE,FALSE), size = stanData$N,
-                              prob = c(0.3, 0.7), replace = TRUE)
-          return(list(
-            theta = runif(1, min = 0.35, max = 0.65),
-            mu1 = apply(stanData$Z[areInGrp1,], 2, mean ),
-            mu2 = apply(stanData$Z[!areInGrp1,], 2, mean ),
-            tau1 = apply(stanData$Z[areInGrp1,], 2, sd ),
-            tau2 = apply(stanData$Z[!areInGrp1,], 2, sd ),
-            L_Omega1 = diag(stanData$M),
-            L_Omega2 = diag(stanData$M)
-          ))
-        }
-
+        # init = "0". Nevertheless, this suggestion solves the problem.
 
         rawSamples <- rstan::sampling(GcClust:::sm, data = stanData,
                                       init = gen_inits,
+                                      # control = list(stepsize = 0.00001),
                                       control = list(stepsize = 0.0001),
-                                    # control = list(adapt_delta = 0.95),
-                                      chains = 1, iter = nSamplesPerChain,
+                                      # control = list(adapt_delta = 0.95),
+                                      chains = 1,
+                                      iter = nWuSamples + nPwuSamples,
+                                      warmup = nWuSamples,
                                       seed = rng_seed, chain_id = cid,
                                       pars=c("theta", "mu1", "mu2",
                                              "tau1", "tau2",
@@ -529,12 +537,12 @@ sampleFmm <- function(transData, nPCs,
                     N = nrow(transData$robustPCs),
                     Z = transData$robustPCs[,1:nPCs])
 
-  fileNames <- rstanParallelSampler(stanData, nSamplesPerChain,
+  fileNames <- rstanParallelSampler(stanData, nWuSamples, nPwuSamples,
                                     nChainsPerCore, nCpuCores, procDir )
 
   return(list(nChains = nChainsPerCore * nCpuCores,
-              nSamplesPerChain = nSamplesPerChain,
-              nSamplesPWU = as.integer(nSamplesPerChain/2),
+              nWuSamples = nWuSamples,
+              nPwuSamples = nPwuSamples,
               fileNames = fileNames))
 }
 
@@ -574,11 +582,12 @@ sampleFmm <- function(transData, nPCs,
 #' @export
 plotSelectedTraces <- function(samplePars, procDir = ".") {
 
-  sampleIndices <- 1:samplePars$nSamplesPWU + samplePars$nSamplesPWU
+  oldSetting <- devAskNewPage( ask = TRUE )
+  on.exit(oldSetting, add = TRUE)
+
+  sampleIndices <- samplePars$nWuSamples + 1:samplePars$nPwuSamples
   N <- length(samplePars$fileNames)
   for(i in 1:N){
-
-    devAskNewPage( ask = TRUE )
 
     load( paste(procDir, "\\", samplePars$fileNames[i], sep = ""))
     theSamples <- rstan::extract(rawSamples, permuted = FALSE)
@@ -622,7 +631,6 @@ plotSelectedTraces <- function(samplePars, procDir = ".") {
     print(p2, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
     print(p3, vp=grid::viewport(layout.pos.row=3, layout.pos.col=1))
 
-    devAskNewPage( ask = options()$device.ask.default )
   }
 }
 
@@ -703,7 +711,7 @@ plotPointStats <- function(samplePars, procDir = ".",
       ggplot2::geom_pointrange() +
       ggplot2::ylim(yRange[1], yRange[2]) +
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle=90, vjust=0.125)) +
-      ggplot2::xlab("Solution") +
+      ggplot2::xlab("Chain") +
       ggplot2::ylab(yLabel)
 
     return(p)
@@ -733,7 +741,7 @@ plotPointStats <- function(samplePars, procDir = ".",
                                colour = "red") +
       ggplot2::ylim(yRange[1], yRange[2]) +
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle=90, vjust=0.125)) +
-      ggplot2::xlab("Solution") +
+      ggplot2::xlab("Chain") +
       ggplot2::ylab(yLabel)
 
     return(p)
@@ -956,11 +964,11 @@ calcCondProbs1 <- function(transData, nPCs, combinedChains) {
   return(condProb)
 }
 
-#' @title Calculate observed test quantities for model checking
+#' @title Calculate observed test statistics for model checking
 #'
-#' @description Calculate test quantities for posterior
+#' @description Calculate test statistics for posterior
 #' predictive checking
-#' of the parameters in the finite mixture model. The test quantities pertain
+#' of the parameters in the finite mixture model. The test statistics pertain
 #' to the observed data that have undergone both the isometric log-ratio
 #' transform and the robust, principal component transform.
 #'
@@ -977,7 +985,7 @@ calcCondProbs1 <- function(transData, nPCs, combinedChains) {
 #' complete descriptoin of container \code{condProbs1}.
 #'
 #' @details
-#' Test quantities are defined in Gelman et al. (2014, p. 145) and
+#' Test statistics are defined in Gelman et al. (2014, p. 145) and
 #' are used for posterior predictive checking of the finite mixture model.
 #'
 #' @return A list with the following test quantities is returned.
@@ -995,12 +1003,12 @@ calcCondProbs1 <- function(transData, nPCs, combinedChains) {
 #'
 #' @examples
 #' \dontrun{
-#' obsTestQuantities <- calcObsTestQuantities(transData, nPCS, condProbs1)
+#' obsTestStats <- calcObsTestStats(transData, nPCS, condProbs1)
 #' }
 #'
 #'
 #' @export
-calcObsTestQuantities <- function(transData, nPCS, condProbs1) {
+calcObsTestStats <- function(transData, nPCS, condProbs1) {
 
   # associated with pdf 1
   S1 <- cov.wt(transData$robustPCs[,1:nPCs], wt = colMeans(condProbs1) )
@@ -1118,29 +1126,29 @@ plotModelCheck_MS <- function( combinedChains, obsTestQuantities,
   }
 
 
-  p1 <- Internal1( obsTestQuantities$mu1,
-                   rstan::extract(combinedChains, pars="mu1")$mu1,
-                   intervalPercentage,
-                   plotTitle = "Mean for pdf 1")
-  p2 <- Internal1( obsTestQuantities$tau1,
-                   rstan::extract(combinedChains, pars="tau1")$tau1,
-                   intervalPercentage,
-                   plotTitle = "Sd for pdf 1")
-  p3 <- Internal1( obsTestQuantities$mu2,
-                   rstan::extract(combinedChains, pars="mu2")$mu2,
-                   intervalPercentage,
-                   plotTitle = "Mean for pdf 2")
-  p4 <- Internal1( obsTestQuantities$tau2,
-                   rstan::extract(combinedChains, pars="tau2")$tau2,
-                   intervalPercentage,
-                   plotTitle = "Sd for pdf 2")
+  p_mu1 <- Internal1( obsTestQuantities$mu1,
+                      rstan::extract(combinedChains, pars="mu1")$mu1,
+                      intervalPercentage,
+                      plotTitle = "Mean for pdf 1")
+  p_tau1 <- Internal1( obsTestQuantities$tau1,
+                       rstan::extract(combinedChains, pars="tau1")$tau1,
+                       intervalPercentage,
+                       plotTitle = "Sd for pdf 1")
+  p_mu2 <- Internal1( obsTestQuantities$mu2,
+                      rstan::extract(combinedChains, pars="mu2")$mu2,
+                      intervalPercentage,
+                      plotTitle = "Mean for pdf 2")
+  p_tau2 <- Internal1( obsTestQuantities$tau2,
+                       rstan::extract(combinedChains, pars="tau2")$tau2,
+                       intervalPercentage,
+                       plotTitle = "Sd for pdf 2")
 
   grid::grid.newpage()
   grid::pushViewport(grid::viewport(layout=grid::grid.layout(2,2)))
-  print(p1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
-  print(p2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
-  print(p3, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
-  print(p4, vp=grid::viewport(layout.pos.row=2, layout.pos.col=2))
+  print(p_mu1, vp=grid::viewport(layout.pos.row=1, layout.pos.col=1))
+  print(p_mu2, vp=grid::viewport(layout.pos.row=1, layout.pos.col=2))
+  print(p_tau1, vp=grid::viewport(layout.pos.row=2, layout.pos.col=1))
+  print(p_tau2, vp=grid::viewport(layout.pos.row=2, layout.pos.col=2))
 
 }
 
@@ -1188,7 +1196,7 @@ plotModelCheck_MS <- function( combinedChains, obsTestQuantities,
 #' of the correlation matrices:  Below the diagonal, which is solid red, is
 #' one triangle of the correlation matrix that is calculated from the field data.
 #' Above the diagonal is one triangle of the correlation matrix that is the
-#' mean correlation matrix calculated from the Monte Carlo samples.
+#' median correlation matrix calculated from the Monte Carlo samples.
 #' The right side presents the associated p-values.
 #' The color scale ranges from the smallest calculated p-value to 0.5,
 #' which is the largest possible p-value (based on the previous definition).
@@ -1208,11 +1216,17 @@ plotModelCheck_C <- function( combinedChains, obsTestQuantities) {
 
   Internal1 <- function(obsCorr, repCorr, plotTitle) {
     Y <- apply(repCorr, c(2,3), median)
-    Z <- obsCorr
+
+    M <- nrow(obsCorr)
+    Z <- matrix(1.0, nrow = M, ncol = M, dimnames = list( 1:M, 1:M))
+    Z[upper.tri(Z)] <- obsCorr[upper.tri(obsCorr)]
     Z[lower.tri(Z)] <- Y[lower.tri(Y)]
-    Z <- reshape2::melt(Z)
-    w <- ggplot2::ggplot(Z, ggplot2::aes(Var2, Var1))+
-      ggplot2::geom_tile(data=Z, ggplot2::aes(fill=value), color="white")+
+
+    X <- reshape2::melt(Z)
+    X <- na.omit(X)
+
+    w <- ggplot2::ggplot(X, ggplot2::aes(Var2, Var1))+
+      ggplot2::geom_tile(data=X, ggplot2::aes(fill=value), color="white")+
       ggplot2::scale_fill_gradient2(low="blue", high="red", mid="white",
                                     midpoint=0, limit=c(-1,1),
                                     name="Correlation\n(Pearson)")+
@@ -1230,13 +1244,16 @@ plotModelCheck_C <- function( combinedChains, obsTestQuantities) {
     nMcSamples <- theDimensions[1]
     M <- theDimensions[2]
 
-    pValues <- matrix(NA_real_, nrow = M, ncol = M )
+    pValues <- matrix(NA_real_, nrow = M, ncol = M, dimnames = list( 1:M, 1:M) )
     for(i in 1:(M-1)) {
       for(j in (i+1):M) {
         tmp <- sum(repCorr[ , i, j ] > obsCorr[i,j]) / nMcSamples
         pValues[i,j] <- ifelse(tmp <= 0.5, tmp, 1-tmp)
       }
     }
+
+    # The rational for the following code is presented in function Internal1.
+    pValues <- pValues[rev(rownames(pValues)),]
 
     Z <- reshape2::melt(pValues)
     Z <- na.omit(Z)
