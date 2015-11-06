@@ -1459,12 +1459,16 @@ backTransform <- function(gcData, nPCs, transData, combinedChains) {
 #' @param symbolSize The size of the plotting symbol.
 #'
 #' @details
-#' A plot symbol represents the distribution for a mean component.
-#' The vertical line within a symbol represent the percentage interval of the
-#' distribution, which is specified as an argument to this function.
-#' For example, if the percentage interval is 95, then bottom and the top
-#' of the vertical line represent the 0.025 and 0.975 quantiles of the
-#' distribution. The circle represents the median of the distribution
+#' The standardized compositional mean is a vector. The Monte Carlo samples
+#' of this vector comprise Monte Carlo samples of each vector element.
+#' The later must be summarized so that they can be visualized.
+#' To this end, the 0.025, 0.5, and 0.975 quantiles of the samples for
+#' each vector element is computed. (The 0.025 and 0.975 quantiles correspond
+#' to the default value of argument intervalPercentage.) The compositional
+#' operation of closure is not applied to these quantiles.
+#' Each plot symbol represents the distribution for a vector element.
+#' The vertical line within a symbol represents the range of the 0.025 and
+#' 0.975 quantiles; the dot within a symbol represents the 0.5 quantile.
 #'
 #' @references
 #' Pawlowsky-Glahn, V., Egozcue, J.J., and Tolosana-Delgado, R., 2015, Modeling
@@ -1544,20 +1548,30 @@ plotStdCompMeans <- function(simplexModPar, simplexStats, gcData, elementOrder,
 #' @param simplexModPar
 #' List containing Monte Carlo samples of the selected parameters
 #' in the finite mixture model.
-#' These parameters (namely, the mean vector and covariance matrix for
+#' These parameters (namely, the mean vector, the standard deviation vector,
+#'  and the correlation matrix for
 #' each pdf) are expressed in terms of their equivalent values in the
 #' simplex (namely, the compositional mean vector and the variation matrix
 #' for each pdf).
-#' This list is return by function \code{\link{backTranform}}, for which the
+#' This list is return by function \code{\link{backTransform}}, for which the
 #' documentation includes a complete description of this container.
+#'
 #' @param elementOrder
 #' Vector specifying the order in which the elements are plotted.
+#'
 #' @param symbolSize
 #' The size of the plotting symbol.
 #'
 #' @details
-#' The plot does not include distribution intervals of the
-#' mean components, because the intervals are smaller than the symbol size.
+#' The compositional mean is a vector. The Monte Carlo samples of this
+#' vector comprise Monte Carlo samples of each vector element. The later
+#' must be summarized so that they can be visualized. To this end, the
+#' median of the samples for each vector element is computed. The compositional
+#' operation of closure is not applied to the medians.
+#'
+#' Although it is possible to compute, say, the 95% credible interval for
+#' each vector element, the interval is smaller than the plot symbol for the
+#' median.
 #'
 #' @examples
 #' \dontrun{
