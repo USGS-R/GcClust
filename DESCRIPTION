@@ -1,6 +1,6 @@
 Package: GcClust
 Type: Package
-Title: Cluster field samples of geochemical data based on HMC sampling
+Title: Clustering field samples of geochemical data with HMC sampling
 Version: 0.1
 Date: 2015-09-17
 Authors@R: person("Karl", "Ellefsen", email = "ellefsen@usgs.gov", role = c("aut", "cre"))

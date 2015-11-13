@@ -16,7 +16,7 @@ This user's guide describes how package GcClust is used to cluster regional geoc
 
 The scope of this user's guided is limited. It does not provide detailed descriptions of the functions because this information is available in the package Help. It does not describe the mathematics of the finite mixture model; this description will be published separately. It does not describe Bayesian data analysis including Monte Carlo sampling, methods for analyzing compositional data such as geochemical data, and geochemical interpretation of clusters. We assumed that you are familar with these topics. If not, you may find information about Bayesian data analysis in  Gelman and others (2014) and information about compostional data analysis in Pawlowsky-Glahn and others (2015).
 
-The goals of this user's guide are most readily achieved by showing the step-by-step processing of a data set, so this package includes a regional geochemical data set. The data set comprises measurements of 959 soil samples that were collected in the state of Colorado, United States of America. For each sample, the measurements include the chemical concentrations of 39 elements. Additional information about these data are listed under "CoGeochemData" in the package Help.
+The goals of this user's guide are most readily achieved by showing the step-by-step processing of a data set, so this package includes a regional geochemical data set. The data set comprises measurements of 959 soil samples that were collected in the state of Colorado, United States of America. For each sample, the measurements include the chemical concentrations of 39 elements. Additional information about these data is available in "CoGeochemData" within the package Help.
 
 This user's guide includes R-language scripts that are used to cluster the Colorado data. We highly recommend that you copy these scripts into a file and execute the scripts. This effort will help you become familar with the processing and its analysis. Some details of your processing results will differ from the results presented in this user's guide because of the random nature of the calculations. Nonetheless, the general features of your processing results will be the same.
 
@@ -302,21 +302,23 @@ This plot readily shows how the standardized element concentrations change betwe
 
 This plot depends upon the parameters that are used for the centering and scaling. Consequently, this plot can be compared only to other plots for which the same parameters are used. Because this processing is the first clustering of the Colorado data, there are no other plots. However, for subsequent clustering, there are such plots. This important issue is discussed further in section [Processing the clusters].
 
-## Plotting the scaled variation matrix
+## Plotting the scaled variation matrices
 
-Monte Carlo samples of the variation matrix comprise Monte Carlo samples of its matrix elements. The samples of each matrix element are summarized by their median. This variation matrix with the medians is symmetric with respect to its diagonal. To prevent redundancy, only the upper triangle of the variation matrix for pdf 1 is provided, and only the lower triangle of the variation matrix for pdf 2 is provided. These two triangles are combined into a single matrix and plotted:
+Monte Carlo samples of the variation matrix comprise Monte Carlo samples of its matrix elements. The samples of each matrix element are summarized by their median. This variation matrix with the medians is symmetric with respect to its diagonal. To prevent redundancy, the upper triangle of the variation matrix for pdf 1 and the lower triangle of the variation matrix for pdf 2 are combined into a single matrix. The combined variation matrix plotted:
 ```
 plotSqrtVarMatrices( simplexModPar, elementOrder, colorScale = "spectrum" )
 ```
 
-![Figure 11. Scaled variation matrix. The upper triangle is the upper triangle from the variation matrix for pdf 1, and the lower triangle is the lower triangle from the variation matrix for pdf 2. The pixels represent scaled variances (namely, the standard deviations) of the log-ratios between the respective chemical elements.](figures/VarMatrix.png)
+![Figure 11. Combined, scaled variation matrix. The upper triangle is the upper triangle from the variation matrix for pdf 1, and the lower triangle is the lower triangle from the variation matrix for pdf 2. The pixels represent scaled variances (namely, the standard deviations) of the log-ratios between the respective chemical elements.](figures/VarMatrix.png)
 
-The range of the variances in the variation matrix may be large, so the variances are scaled by the square root function. Consequently, the pixels in the Figure 11 strictly represent standard deviations of the log-ratios between the respective chemical elements. Again, the order of the elements is specified by vector `element order`.
+The range of the variances in the matrix may be large, so the variances are scaled by the square root function. Consequently, the pixels in the Figure 11 represent standard deviations of the log-ratios between the respective chemical elements. Again, the order of the elements is specified by vector `element order`.
 
 
 ## Mapping the clusters
 
-plotProbMap
+The conditional probabilities that the field samples are associated with pdf 1 was calculated in section [Checking the model]. A map showing showing the spatial distribution of these associations is very helpful when interpreting the geochemical data. To this end, the conditional probabilities must be grouped into meaning categories. 
+
+We have found that 4 categories are useful for interpetation. The first category indicates a strong association with pdf 1 and comprises those field samples for which the median conditional probabilities range from 0.9 to 1.0. The second category indicates a moderate association with pdf 1 and comprises those field samples for which the median conditional probabilities range from 0.5 to 0.9. The third category indicates a moderate association with pdf 2 (namely, a weak association with pdf 1) and comprises those field samples for which the median conditional probabilities range from 0.10 to 0.5. The fourth category indicates a strong association with pdf 2 (namely, a very weak association with pdf 1) and comprises those field samples for which the median conditional probabilities range from 0.0 to 0.1. These categories define clusters of the field samples, which can be plotted:
 ```
 map('state', regions = 'colorado', fill = TRUE, col = "gray60", border = "white")
 map.axes()
@@ -325,19 +327,39 @@ plotClusters(gcData, condProbs1, symbolSizes = rep.int(2/3, 4))
 
 ![Figure 12. Map of the clusters. Each dot represents the location of a field sample. Dot color represents the strength of the association between a field sample and a pdf in the finite mixture model: Blue and green indicate strong and moderate assocation, respectively, with pdf 1; red and yellow indicate strong and moderate association, respectively, with pdf 2.](figures/ClusterMap.png)
 
-The symbol colors, symbol sizes, and symbol type have been chosen so that the symbols are easily perceived when they are plotted on a gray background. Be careful when changing these parameters!
-The default values work well, so the occasions to change them should be rare.
-Describe association in terms of the conditional probabilities.
+The number of categories and the related intervals of the median conditional probability are specified in argument `probIntervals` of function `plotClusters`. Likewise, the plot symbols, their sizes, and their colors may also be changed. However, we found that the default values for these arguments work well for many maps.
+
+The value of a cluster map becomes apparent when it is viewed with the standardized compositional means (Figure 10) and the scaled variation matrices (Figure 11). For example, the cluster of blue dots, which has a strong association with pdf 1, has higher concentrations of potassium (K), rubidium (Rb), barium (Ba), and arsenic (As) than the cluster of red dots does. In addition, the cluster of blue dots has lower variability in the log-ratios associated with K, Rb, Ba, and As than the cluster of red dots does. This information is then interpreted by relating it to independent information, such as geologic information.
 
 # Splitting the geochemical data
 
+The field samples in each cluster may processed to find finer-scale clusters. To this end, the field samples must be split, and this operation is accomplished with function `splitGcData`: 
+```
+theSplits <- splitGcData(gcData, condProbs1, threshold = 0.10 )
+```
+The splitting is based on argument `threshold`: Field samples for which the median conditional probability is between 1-threshold and threshold (namely, field samples strongly associated with pdf 1) comprise one group, and their data container is named `gcData1`. Field samples for which the median conditional probability is between 0 and threshold (namely, field samples strongly associated with pdf 2) comprise the other group, and their data container is named `gcData2`. Field samples for which the median conditional probability is between threshold and 1-threshold are omitted. We have found the a suitable value for argument `threshold` is approximately 0.1, which is its default value.
+
+Both `gcData1` and `gcData2` are organized as described in section [Organization of the geochemical data]; consequently, they are ready for further processing. Both are returned by function `splitGcData` as elements in an R-language list.  
+
+The next step is to create new directories. For this example, we name our directories "Process11" and "Process12" because they are derived from "Process1" and pertain to pdfs 1 and 2, respectively. The geochemical data are written into these directories using the following code: 
+```
+# Beware: this overwrites gcData !!!
+gcData <- theSplits$gcData1
+save( gcData, file = "..\\Process11\\gcData.dat" )
+
+# Beware: this overwrites gcData !!!
+gcData <- theSplits$gcData2
+save( gcData, file = "..\\Process12\\gcData.dat" )
+```
+Observe that both list elements are renamed `gcData` so that the R-language scripts, that are used for processing, do not need editting. 
+
 # Processing the splits
 
-standarization
+The geochemical data in "Process11" and "Process12" are clustered by applying  the processing that already has been described in this user's guide. There are only two issues that require further discussion. 
 
-When do we stop??
+First, in section [Plotting the compositional mean], the plot of the standardized compositional mean was created using standardization statistics that were calculated from the geochemical data that were being processed (namely, the geochemical data for the entire survey area). When the plot of the standardized compositional mean is created for, say, "Process11", the standardization statistics likewise could be calculated from the data in "Process11". Although such a plot is invaluable for interpretation, the resulting plot cannot be compared to corresponding plots for other clusters. To overcome this problem, additional plots of the standardized compositional mean may be created using standardization statistics that were generated within "Process1"; these plots can be compared to one another.
 
-
+The second issue is deciding when to stop the clustering. Heretofore, our experience has been that when the number of field samples in a cluster is about 250 or 300, then the Monte Carlo sampling does not converge. Consequently, we have stopped. As we gain more experience, then this criterion probably be replaced with better criteria.
 
 # References
 Hoffman, M., and Gelman, A., 2013, The no-U-turn sampler-Adaptively setting path lengths in Hamiltonian Monte Carlo, available on line at http://arxiv.org/abs/1111.4246 (last accessed November 2015).
