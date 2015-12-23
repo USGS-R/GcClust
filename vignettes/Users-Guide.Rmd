@@ -286,7 +286,7 @@ The compositional center is a vector, in which each vector element corresponds t
 plotCompMeans(simplexModPar, elementOrder)
 ```
 
-![Figure 9. Compositional centers for the two pdfs. Each dot represents the median of the Monte Carlo samples for the associcated chemical element.](figures/CompMeans.png)
+![Figure 9. Compositional centers for the two pdfs for the first mode. Each dot represents the median of the Monte Carlo samples for the associcated chemical element.](figures/CompCenters.png)
 
 The concentration for everything else "EE" is missing from this plot, which is the default for this function. This plot is useful for at least two reason. First, the compositional centers are expressed in terms of concentrations making it relatively easy to interpret them. Second, this plot can be directly compared to similar plots of compositional centers. In contrast, plots of standardized compositional centers, which are discussed next, may be compared only in certain cases. 
 
@@ -303,7 +303,7 @@ Function `plotTransCompMeans` uses the simplex statistics to perform the transla
 plotTransCompMeans( simplexModPar, simplexStats, gcData, elementOrder)
 ```
 
-![Figure 10. Translated compositional centers for the two pdfs. Within a plot symbol, the dot represents the median of the Monte Carlo samples, and the vertical line represents the 95% credible interval. The horizontal black line represents the barycenter.](figures/StdCompMeans.png)
+![Figure 10. Translated compositional centers for the two pdfs for the first mode. Within a plot symbol, the dot represents the median of the Monte Carlo samples, and the vertical line represents the 95% credible interval. The horizontal black line represents the barycenter.](figures/TransCompCenters.png)
 
 The translated center for everything else "EE" is missing from this plot, which is the default for this function. For each chemical element, the median and the 95% credible interval summarize the distribution of its translated center. This plot readily shows how the translated compostional centers change between pdfs 1 and 2. For example, Figure 10 shows that element indium (In) is much higher in pdf 1 than it is in pdf 2. This information may be combined with the spatial distribution of the clusters, greatly facilitating the interpretation of the geochemical data. 
 
@@ -316,7 +316,7 @@ Monte Carlo samples of the variation matrix comprise Monte Carlo samples of its 
 plotSqrtVarMatrices( simplexModPar, elementOrder, colorScale = "spectrum" )
 ```
 
-![Figure 11. Combined, scaled variation matrix. The upper triangle is the upper triangle from the variation matrix for pdf 1, and the lower triangle is the lower triangle from the variation matrix for pdf 2. The pixels represent scaled variances (namely, the standard deviations) of the log-ratios between the respective chemical elements.](figures/VarMatrix.png)
+![Figure 11. Combined, scaled variation matrix for the first mode. The upper triangle is the upper triangle from the variation matrix for pdf 1, and the lower triangle is the lower triangle from the variation matrix for pdf 2. The pixels represent scaled variances (namely, the standard deviations) of the log-ratios between the respective chemical elements.](figures/VarMatrix.png)
 
 The range of the variances in the matrix may be large, so the variances are scaled by the square root function. Consequently, the pixels in the Figure 11 represent standard deviations of the log-ratios between the respective chemical elements. Again, the order of the elements is specified by vector `element order`. The standard deviations associated with everything else "EE" are missing from this plot, which is the default for this function.
 
@@ -331,7 +331,7 @@ map.axes()
 plotClusters(gcData, condProbs1, symbolSizes = rep.int(2/3, 4))
 ```
 
-![Figure 12. Map of the clusters. Each dot represents the location of a field sample. Dot color represents the strength of the association between a field sample and a pdf in the finite mixture model: Blue and green indicate strong and moderate association, respectively, with pdf 1; red and yellow indicate strong and moderate association, respectively, with pdf 2.](figures/ClusterMap.png)
+![Figure 12. Map of the clusters for the first mode. Each dot represents the location of a field sample. Dot color represents the strength of the association between a field sample and a pdf in the finite mixture model: Blue and green indicate strong and moderate association, respectively, with pdf 1; red and yellow indicate strong and moderate association, respectively, with pdf 2.](figures/ClusterMap.png)
 
 The number of categories and the related intervals of the median conditional probability are specified in argument `probIntervals` of function `plotClusters`. Likewise, the plot symbols, their sizes, and their colors may also be changed. However, we have found that the default values for these arguments work well for many maps.
 
