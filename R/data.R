@@ -18,15 +18,15 @@
 #' analysis. First, field sample "06co437" has been deleted because
 #' it has an anomalously high copper concentration.
 #' Second, elements silver (Ag), cesium (Cs), mercury (Hg),
-#' tellurium (Te), and selenium (Se) have been deleted because 98%, 77%,
-#' 69%, 94%, and 45%, respectively, of the measured concentrations are below
+#' tellurium (Te), and selenium (Se) have been deleted because 98\%, 77\%,
+#' 69\%, 94\%, and 45\%, respectively, of the measured concentrations are below
 #' the lower limit of determination. (The lower limit of determination is
 #' the threshold for left-censoring.) The lower limits of determination are
 #' listed in Table 1 of Smith et al., 2010.
 #'
 #' Third, elements antimony (Sb), arsenic (As), bismuth (Bi), cadmium (Cd),
-#' indium (In), phosphorous (P), and sulfur (S) have 0.208%, 0.417%, 1.15%,
-#' 5.62%, 14.1%, 0.521%, and 3.02%, respectively, of the measured
+#' indium (In), phosphorous (P), and sulfur (S) have 0.208\%, 0.417\%, 1.15\%,
+#' 5.62\%, 14.1\%, 0.521\%, and 3.02\%, respectively, of the measured
 #' concentrations below the lower limit of determination.
 #' These left-censored concentrations were assigned concentrations equal to
 #' 0.65 times their respective lower limit of determination

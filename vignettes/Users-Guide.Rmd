@@ -14,36 +14,37 @@ vignette: >
 # Introduction
 This user's guide describes how package GcClust is used to cluster regional geochemical data. To this end, this guide describes how to use the functions in package GcClust and how to evaluate the results returned by those functions. 
 
-The scope of this user's guided is limited. It does not provide detailed descriptions of the functions because this information is available in the package Help. It does not describe the mathematics of the finite mixture model; this description will be published separately. It does not describe Bayesian data analysis including Monte Carlo sampling, methods for analyzing compositional data such as geochemical data, and geochemical interpretation of clusters. We assumed that you are familar with these topics. If not, you may find information about Bayesian data analysis in  Gelman and others (2014) and information about compostional data analysis in Pawlowsky-Glahn and others (2015).
+The scope of this user's guided is limited. It does not provide detailed descriptions of the functions because this information is available in the package Help. It does not describe the mathematics of the finite mixture model, Bayesian data analysis including Monte Carlo sampling, methods for analyzing compositional data such as geochemical data, and geochemical interpretation of clusters. We assumed that you are familar with these topics. If not, you may find information about Bayesian data analysis in  Gelman and others (2014) and information about compostional data analysis in Pawlowsky-Glahn and others (2015).
 
-The goals of this user's guide are most readily achieved by showing the step-by-step processing of a data set, so this package includes a regional geochemical data set. The data set comprises measurements of 959 soil samples that were collected in the state of Colorado, United States of America. For each sample, the measurements include the chemical concentrations of 39 elements. Additional information about these data is available in "CoGeochemData" within the package Help.
+Both the mathematics of the finite mixture model and the geochemical interpretation of the figures in this user's guided are being published separately.
 
-This user's guide includes R-language scripts that are used to cluster the Colorado data. We highly recommend that you copy these scripts into a file and execute the scripts. This effort will help you become familar with the processing and its analysis. Some details of your processing results will differ from the results presented in this user's guide because of the random nature of the calculations. Nonetheless, the general features of your processing results will be the same.
+The goals of this user's guide are most readily achieved by showing the step-by-step processing of a data set, so this package includes a regional geochemical data set. The data set comprises measurements of 959 soil samples that were collected in the State of Colorado, United States of America. For each sample, the measurements include the chemical concentrations of 39 elements. Additional information about these data is available in "CoGeochemData" within the package Help.
 
-The remainder of the user's guide is divided into 8 sections: [Organization of the geochemical data], [Preparatory steps], [Data transformation and analysis], [Sampling the posterior probability density function], [Analysis and processing of the Monte Carlo samples], [Cluster visualization], [Splitting the geochemical data], [Processing the splits], and [References].
+This user's guide includes R-language scripts that are used to cluster the Colorado data. We encourage you to copy these scripts into a file and execute them. This effort will help you become familar with the processing and its analysis. Some details of your processing results will differ from the results presented in this user's guide because of the random nature of the calculations. Nonetheless, the general features will be the same.
+
+The remainder of the user's guide is divided into 6 major sections: [Organization of the geochemical data], [Preparatory steps], [Pre-processing and analysis], [Monte Carlo sampling], [Checking the model],  [Splitting the geochemical data], and [Miscellaneous issues].
 
 # Organization of the geochemical data
 
 ## First element
 
-The geochemical data is organized as a R-language list with three elements. The first list element is called "concData", and it contains the geochemical concentrations and related information. The list element is a data container, which is called a `SpatialPointsDataFrame`. This container is defined in the "sp" package and was designed specifically for spatial data. A SpatialPointsDataFrame comprises several sub-containers, which are fully described in the sp package documentation. Two sub-containers are especially important here. 
+The geochemical data is organized as a R-language list with three elements. The first list element is called "concData", and it contains the geochemical concentrations and related information. This list element is a  `SpatialPointsDataFrame`, which is defined in the "sp" package and is designed specifically for spatial data. A SpatialPointsDataFrame comprises several data containers, which are fully described in the sp package documentation. Two data containers are especially important here. 
 
-The first sub-container is an R-language data frame that stores the geochemical concentrations for each field sample. Each row of this data frame pertains to one field sample, and the name of the row is the name of the field sample. Each column pertains to one element, and the name of the column is the abbreviated name of the element (for example, "Al" or "Zn"). So, a row of the data frame comprises all element concentrations for one field sample, and a column of the data frame comprises the concentrations of one element for all field samples. 
+The first data container is an R-language data frame that stores the geochemical concentrations for each field sample. Each row of this data frame pertains to one field sample, and the name of the row is the name of the field sample. Each column pertains to one element, and the name of the column is the abbreviated name of the element (for example, "Al" or "Zn"). So, a row of the data frame comprises all element concentrations for one field sample, and a column of the data frame comprises the concentrations of one element for all field samples. 
 
-There are three requirements for the measured concentrations. First, the concentrations must not have any missing values. Second, concentrations that are left-censored (that is, below the lower limit of determination) must be replaced by an imputed concentrations. Finally, all concentrations must have the same units. Typically these units are "mg/kg".
+There are three requirements for the measured concentrations. First, the concentrations must not have any missing values. Second, concentrations that are left-censored (that is, below the lower limit of determination) must be replaced by imputed values. Finally, all concentrations must have the same units. Typically these units are "mg/kg".
 
-The second sub-container is an R-language matrix that stores the spatial locations of the field samples. Each row of the matix pertains to one field sample and is associated with a corresponding row of the data frame. The matrix has two columns, which store the coordinates of the field samples. The coordinates are typically lattitude and longitude; the coordinates must have the same datum, which is typically the WGS84 datum.
+The second data container is an R-language matrix that stores the spatial locations of the field samples. Each row of the matix pertains to one field sample and is associated with a corresponding row of the data frame. The matrix has two columns, which store the coordinates of the field samples. The coordinates are typically lattitude and longitude; the coordinates must have the same datum, which is typically the WGS84 datum.
 
 ## Second element
 The second list element is called "censorIndicators", and it contains information about the censoring of the measured concentrations. The list element is an R-language array.  The structure of the array is identical to the structure of the data frame containing the concentrations: The array and the data frame have the same number of rows, the same number of columns, the same row names, and the same column names. Consequently, identifying the status of a particular concentration is easy. An array element may have two possible values: "no" meaning that the concentration is not censored and "left" meaning that the original concentration is left-censored and has been replaced by an imputed value.
 
 ## Third element
-The third list element is called "constSumValue". Geochemical data sum to a constant value even if some element concentrations are not reported. For geochemical data, the constant sum value typically is 1000000 mg/kg, so the `constSumValue` equals 1000000.
+The third list element is called "constSumValue". Geochemical data sum to a constant value even if some element concentrations are not reported. For geochemical data, the constant sum value typically is 1000000 mg/kg. In this case, the `constSumValue` equals 1000000.
 
 # Preparatory steps
 
-Create a directory named `Process1`, and set the working directory to 
-`Process1`. Execute these scripts:
+Create a directory named `Process1`, and set the working directory to `Process1`. Execute these scripts:
 ```
 library(GcClust)
 gcData <- CoGeochemData
@@ -53,13 +54,13 @@ The first script loads library `GcClust`. The second script assigns the Colorado
 
 Create a file named `ProcessScripts.R`; you should copy the R-language scripts from this user guide into this file and then execute them. Such a file is valuable for at least two reasons. First, the file is a record of how the data are processed; this record ensures that the processing is reproducible. Second,  modifying a processing step is relatively easy in most cases: Only the associated R-language script in the file is editted.
 
-Copy this code into file `ProcessScript.R` and then execute it. (For the remainder of this guide, these "copy-and-execute" instructions are not stated anymore.)
+Copy this code into file `ProcessScript.R` and then execute it. (For the remainder of this guide, these "copy-and-execute" instructions are not stated again.)
 ```
 library(GcClust)   
 library(sp)        
 library(maps)      
 library(shinystan) 
-load("gcData.dat")   # Load the binary file with the geochemical data
+load("gcData.dat")
 ```
 This code loads the needed libraries and the geochemical data.
 
@@ -77,30 +78,33 @@ plot( gcData$concData, add = TRUE, pch = 16, cex = 1/3, col = "black")
 
 You will notice that five samples are plotted just outside the northern and eastern borders. The likely cause of this discrepancy is that the datum for the coordinates of the border, which are specified within package maps, differs from the WGS84 datum for the sample locations. This descrepancy is minor and has no effect on the processing.
 
-# Data transformation and analysis
+# Pre-processing and analysis
 
-The geochemical data are transformed first with the isometric log-ratio transform and second with the principal components transform. Both operations are performed by function `transformGcData`:
+Function `transformGcData` pre-processes the geochemical data:
 ```
-# Transform the geochemical data 
 transData <- transformGcData(gcData)
 
 save(transData, file = "TransData.dat")     
 ```
-The principal components and other related variables are stored in container `transData`. These variables are needed for the clustering.
+The results are stored in container `transData` because they are needed for the clustering.
 
-Function `transformGcData` has a second argument `alpha`, which is assigned a default value in the above scripts. Argument `alpha` is the fraction of the data that is used to calculate the mean vector and the covariance matrix; it may range from 0.50 to 1.00. Relative low values, near 0.50, are appropriate for data with high measurement error; whereas relatively high values, near 1.00, are appropriate for data with low measurement error. There is no formula for selecting an appropriate value---it is a matter of judgement. Our quality control analyses suggest that the geochemical concentrations in `CoGeochemData`, and hence in `gcData`, have relatively low measurement error. Consequently, `alpha` is chosen to be 0.98, which happens to be its default value. 
+There are three different steps to the pre-processing. 
+First, the concentrations for the missing elements are accounted for. Within `gcData` there are concentrations for 39 elements. Obviously, `gcData` is missing the concentrations of all other elements. The missing-element concentrations are collectively represented by a single value. For example, if the concentrations of the 39 elements for one field sample sum to 97,634 mg/kg, then the sum of the missing-element concentrations must be 1,000,000 - 97,634 mg/kg, which equals 902366 mg/kg. So, 902366 mg/kg is used to collectively represent all of the missing-element concentrations for this field sample. Collective, missing-element concentrations are calculated for all field samples, are assigned the name "EE" meaning "everything else", and are appended to the element concentrations. Consequently, the number of effective element concentrations is now 40.
 
-Within `gcData` there are concentrations for 39 elements, so after the isometric log-ratio transformation there are 38 components. That is, the number of elements minus 1 equals the number of components. Hence, there are also 38 principal components.
+Second, the geochemical data with the appended, missing-element concentrations are transformed using the isometric log-ratio (ilr) transform. A consequence of this transform is that the dimension is reduced by 1, so now there are 39 ilr coordinates. Third, the ilr coordinates are transformed with the principal components transform. This transform does not change the dimension---there are 39 principal components.
 
-The principal components are now analyzed graphically to check that they are properly computed and to select appropriate parameters for the clustering. Check the distributions of the principal components:
+Function `transformGcData` has a second argument `alpha`, which is assigned a default value in the above scripts. Argument `alpha` is the fraction of the data that is used to calculate the mean vector and the covariance matrix; it may range from 0.50 to 1.00. Relative low values, near 0.50, are appropriate for data with high measurement error; whereas relatively high values, near 1.00, are appropriate for data with low measurement error. There is no formula for selecting an appropriate value---it is a matter of judgement. Quality control analyses, which U.S. Geological Survey personnel have performed on the geochemical data, indicate that the geochemical concentrations in `CoGeochemData`, and hence in `gcData`, have relatively low measurement error. Consequently, `alpha` is chosen to be 0.98, which happens to be its default value. 
+
+
+The principal components are analyzed graphically to check that they are properly computed and to select appropriate parameters for the clustering. Check the distributions of the principal components:
 ```
 # plot boxplots and violinplots of the principal components
 plotEdaDist(transData)   
 ```
 
-![Figure 2. (upper) Boxplots and (lower) violinplots of the principal components.](figures/EdaDist.png)
+![Figure 2. (a) Boxplots and (b) violinplots of the principal components.](figures/EdaDist.png)
 
-The boxplots and the violinplots (Figure 4) show that the distributions for each component are centered at zero and that the spread of the distributions decreases as the component number increases. This behavior is expected for principal components. For these data, the distributions for each component are unimodal.
+The boxplots and the violinplots (Figure 2) show that the distributions for each component are centered at zero and that the spread of the distributions decreases as the component number increases. This behavior is expected for principal components. For these data, the distributions for each component are unimodal.
 
 Check the correlations among the principal components:
 ```
@@ -108,10 +112,9 @@ Check the correlations among the principal components:
 plotEdaCorr(transData)
 ```
 
-![Figure 3. (upper) Correlation matrix for the principal components. The red diagonal corresponds to the diagonal of the correlation matrix. (lower) Histogram of the correlations.](figures/EdaCorr.png)
+![Figure 3. (a) Correlation matrix for the principal components. The red diagonal corresponds to the diagonal of the correlation matrix. (b) Histogram of the correlations.](figures/EdaCorr.png)
 
-Both the correlation matrix and the histogram (Figure 2)
-indicate that the correlations are small; this property is expected for principal components. As argument `alpha` for function `transformGcData` decreases, the correlations tend to increase slightly. 
+Both the correlation matrix and the histogram (Figure 3) indicate that the correlations are small; this property is expected for principal components. As argument `alpha` for function `transformGcData` decreases, the correlations tend to increase slightly. 
 
 Check the variances of the principal components using a scree plot:
 ```
@@ -121,68 +124,75 @@ plotEdaVar(transData)
 
 ![Figure 4. Scree plot.](figures/EdaVar.png)
 
-Above each bar in the scree plot is the “cumulative percentage of the total variance.” To understand this quantity, consider the variances for just the first three principal components, namely 1.742, 0.791, and 0.519. The cumulative variances are 1.742, 2.533, and 3.052. These cumulative variances are expressed as percentages of the total variance, which is 4.973. Thus, the cumulative percentages of the total variance are 35.03%, 50.94%, and 61.38%. These cumulative percentages mean that the first component accounts for 35.03% of the total variance, the first and second components for 50.94%, and the first, second, and third components for 61.38%. 
+Above each bar in the scree plot (Figure 4) is the “cumulative percentage of the total variance.” To understand this quantity, consider the variances for just the first three principal components, namely 1.795, 0.797, and 0.538. The cumulative variances are 1.795, 2.592, and 3.130. These cumulative variances are expressed as percentages of the total variance, which is 5.0972. Thus, the cumulative percentages of the total variance are 35.22%, 50.86%, and 61.41%. These cumulative percentages mean that the first component accounts for 35.22% of the total variance, the first and second components for 50.86%, and the first, second, and third components for 61.41%. 
 
-A suitable subset of principal components must be selected for the clustering. Our selection criterion is that the chosen components must account for most of the variance in the principal components, which is equivalent to most of the information in the geochemical concentrations. Thus, the subset always includes the lower-order components, namely component 1, component 2, and so on. The relevant issue is determining the last component in the subset. There is no clear-cut method of resolving this issue, but the cumulative percentage of the total variance is helpful: The higher the cumulative percentage, the greater the amount of information that is used for the clustering. However, if the cummulative percentage is too high, then noise is included in the clustering. Our experience indicates that a suitable percentage ranges roughly from 75% to 95%. For this analysis, we chose a threshold of 96%, which corresponds to 21 principal components. Consequently, variable `nPCs` is set to 21:
+A suitable subset of principal components must be selected for the clustering. Our selection criterion is that the chosen components must account for most of the variance in the principal components, which is equivalent to most of the information in the geochemical concentrations. Thus, the subset always includes the lower-order components, namely component 1, component 2, and so on. The relevant issue is determining the last component in the subset. There is no clear-cut method of resolving this issue, but the cumulative percentage of the total variance is helpful: The higher the cumulative percentage, the greater the amount of information that is used for the clustering. However, if the cummulative percentage is too high, then noise is included in the clustering. Our experience indicates that a suitable percentage ranges roughly from 75% to 95%. For this analysis, we chose a threshold of 96%, which corresponds to 22 principal components. Consequently, variable `nPCs` is set to 22:
 ```
 # number of principal components
-nPCs <- 21         
+nPCs <- 22         
 ```
 
-# Sampling the posterior probability density function
-Perform Monte Carlo sampling of the posterior probability density function (pdf):
+# Monte Carlo sampling 
+## Sampling
+The Monte Carlo sampling of the posterior probability density function is performed by package rstan using a previously-compiled object. If you have a Windows operating system, then the object is already compiled and stored in the file "stan\\MixtureModel.bin" within the GcClust directory. It is loaded into the R session with the following code
 ```
-samplePars <- sampleFmm(transData, nPCs, 
-                        nChainsPerCore = 5, nCpuCores = 7)
+tmp <- normalizePath(path.package("GcClust"))
+load(paste(tmp, "\\stan\\MixtureModel.bin", sep=""))
+```
+The name of the object is "sm" because it a stan model. If you have another operating system, then you must compile the object yourself. To this end, file "stan\\CompileStan.R" within the GcClust directory should be helpful.
+
+The sampling is performed by function sampleFmm:
+```
+samplePars <- sampleFmm(transData, nPCs, sm, 
+                        nChainsPerCore = 5, nCores = 7)
 
 save(samplePars, file = "SamplePars.dat")
 ```
-Function argument `nCpuCores` specifies that 7 central processing unit (cpu) cores will be requested from the operating system. Of course, the number of processors that you request must be less than or equal to the number on your computer. Function argument `nChainsPerCore` specifies that 5 separate sampling chains will be computed by each core. So, a total of 35 chains are computed. Our experience is that many chains are needed because there may be multiple modes, and that approximately 35 chains is adequate.
+Function argument `nCores` specifies that 7 processor cores will be requested from the operating system. Of course, the number of processors that you request must be less than or equal to the number on your computer. Function argument `nChainsPerCore` specifies that 5 separate sampling chains will be computed by each core. So, a total of 35 chains are computed. Our experience is that many chains are needed because there may be multiple modes, and that approximately 35 chains is adequate.
 
 The chains are not returned by function `sampleFmm` because they would require too much computer memory. Instead, the chains are written to the computer disk in the directory specified by argument `procDir`, for which the default value is the working directory. The file names have the form "RawSamples?-?.dat", for which the first and second question marks are replaced by the processor number and the chain number respectively.
 
-The time that function `sampleFmm` needs to complete computations depends upon many factors including the number of chains for each processor and the number of  field samples. When we processed these data, the time was approximately one hour.
-
-# Analysis and processing of the Monte Carlo samples
+The time that function `sampleFmm` needs to complete computations depends upon many factors including the number of chains for each processor and the number of  field samples. When we processed these data, the time was approximately 2.5 hours.
 
 ## Checking parameter traces for each chain
 
-The analysis of the Monte Carlo samples begins by checking the parameter traces for each chain.  The number of model parameters, and hence the number of parameter traces, equals $N^2 + 3N + 1$ where $N$ is the number of principal components. For the example in this vignette, the number of principal components is 21, so the number of parameter traces is 505. Examining 505 parameter traces for 35 chains would be overwhelming, so only a subset of 5 parameter traces is examined for each chain. The 5 model parameters are theta, element 1 of the mean vector for pdf 1, element 1 of the mean vector for pdf 2, element 1 of the standard deviation vector for pdf 1, and element 1 of the standard deviation vector for pdf 2. These 5 parameter traces are plotted 
-for all 35 chains with the following code
+The analysis of the Monte Carlo samples begins by checking the parameter traces for each chain.  The number of model parameters, and hence the number of parameter traces, equals $N^2 + 3N + 1$ where $N$ is the number of principal components. For the example in this vignette, the number of principal components is 22, so the number of parameter traces is 551. Examining 551 parameter traces for 35 chains would be overwhelming, so only a subset of 5 parameter traces is examined for each chain. The 5 model parameters are theta, element 1 of the mean vector for pdf 1, element 1 of the mean vector for pdf 2, element 1 of the standard deviation vector for pdf 1, and element 1 of the standard deviation vector for pdf 2. These 5 parameter traces are plotted for all 35 chains with the following code
 ```
 plotSelectedTraces(samplePars)
 ```
 
-![Figure 5. Traces for (upper) theta, (middle) element 1 of the two mean vectors, and (lower) element 1 of the two standard deviation vectors. These traces pertain to chain 1.](figures/SelectedTraces.png)
+![Figure 5. Traces for (a) proportion, (b) element 1 of the two mean vectors, and (c) element 1 of the two standard deviation vectors. These traces pertain to chain 1.](figures/SelectedTraces.png)
 
 Each trace should appear stationary---the trace should consist of random fluctuations having a constant mean and a constant standard deviation. The two traces for element 1 of two mean vectors should not switch with one another. Likewise, the two traces for element 1 of two standard deviation vectors should not switch with one another. If the traces do not satisfy these criteria, then the sampling of the posterior pdf must be modified. The modification are described in the documentation for function `sampleFmm`.
 
-You may notice switching between chains: For example, theta could be 0.42 for chain 1 and 0.58 for chain 2. Associated with this switch in theta are corresponding switches for the other 4 model parameters. Such switching is common and normal. 
+You may notice switching between chains: For example, the proportion could be 0.44 for chain 1 and 0.56 for chain 2. Associated with this switch in proportion are corresponding switches for the other 4 model parameters. Such switching is common and normal. 
 
 ## Selecting the chains
 
-Another component of the analysis is checking point statistics for the model parameters for every chain. Again, for the example in this vignette, there are 505 model parameters, and examining point statistics for these 505 parameters would overwhelming. So, a subset is examined; the subset comprises the 5 model parameters that were discussed in the previous section and natural logarithm of the likelihood. These statistics are plotted with the following code
+Another component of the analysis is checking point statistics for the model parameters for every chain. Again, for the example in this vignette, there are 551 model parameters, and examining point statistics for these 551 parameters would overwhelming. So, a subset is examined; the subset comprises the 5 model parameters that were discussed in the previous section and natural logarithm of the likelihood. These statistics are plotted with the following code
 ```
 plotPointStats(samplePars)
 ```
 
-![Figure 6. Point statistics (upper left) for element 1 of the mean vectors for the two pdfs, (upper right) for element 1 of the standard deviation vectors for the two pdfs, (lower left) theta, and (lower right) log-likelihood. A dot represents the median, and the vertical line represents the 95% credible interval. Blue and red represent pdfs 1 and 2, respectively.  intervals](figures/PointStats.png)
+![Figure 6. Point statistics for (a) element 1 of the two mean vectors, (b) element 1 of the two standard deviation vectors, (c) proportion, and (d) log-likelihood. A dot represents the median, and the vertical line represents the 95% credible interval. Blue and red represent pdfs 1 and 2, respectively.](figures/PointStats.png)
 
-Examine the point statistics for the log-likelihood. The median log-likelihoods are either approximately -7420 or -7500. This result suggests that two modes in the posterior pdf were sampled. The log-likelihood indicates how well the model fits the data---higher values indicate a better fit than lower value do. Consequently, any chain except 22 and 26 could be selected for further analysis. For this example, chains 1, 2, 3, and 4 are selected.
+Examine the point statistics for the log-likelihood (Figure 6d). The median log-likelihoods are either approximately -7320 or -7410. This result suggests that two modes in the posterior pdf were sampled. The log-likelihood indicates how well the model fits the data---higher values indicate a better fit than lower values do. Consequently, it is tempting to select the mode, and hence the chains, associated with the highest log-likelihood. Our experience suggests that this approach is incorrect---all modes should be investigated because some modes yield a better geochemical interpretation than other modes do. For the rest of this vignette, the mode associated with the log-likelihood of approximately -7320 is called "the first mode," and the mode associated with the log-likelihood of approximately -7410 is called "the second mode"
 
-The number of selected chains should range between 2 and 4. If there is just 1 chain, then the statistics that are used to check convergence (which is discussed later) are unreliable. Five or more chains provides little additional information. We try to use 4 chains.
+For the first mode, chains 1, 2, 3, and 4 are selected for a complete analysis. Now examine the point statistics for variable proportion (Figure 6c). The median values of proportion are approximately 0.44, 0.56, 0.44, and 0.56 for chains 1, 2, 3, and 4. This result indicates that chains 2 and 4 are switched relative to chains 1 and 3. This switch is apparent also in the point statistics for element 1 of the mean vectors and element 1 of the standard deviation vectors. Again, this switch is normal.
 
-Now examine the point statistics for theta. For chains 1, 2, 3, and 4, the median values are approximately 0.56, 0.56, 0.56, and 0.44. This result indicates that chain 4 is switched relative to the other three. This switch is apparent also in the point statistics for element 1 of the mean vectors and element 1 of the standard deviation vectors. 
+For the second mode, chains 13 and 33 are selected for a complete analysis. Of course, only these two chains sampled this mode. The median values of proportion are both approximately 0.54, indicating that the chains are not switched relative to one another.
 
-On rare occasions, the samples for a chain are are poorly representative a mode, and the point statistics differ enormously from corresponding point statistics for other chains. To include the point statistics for all chains in a plot, the range for the vertical axis must be expanded, making it difficult to analyze the statistics. To overcome this difficulty, the spurious point statistics are excluded from the range calculation using argument `excludedChains`.
+The number of selected chains should range between 2 and 4. If there is just 1 chain, then the statistics that are used to check convergence (which is discussed later) are unreliable. Five or more chains provides little additional information. We use 4 chains, if they are available.
+
+On rare occasions, the samples in a chain have a vary large variance. As a consequence, the vertical axes in Figure 6 are greately expanded, making it difficult to analyze the four graphs. To overcome this difficulty, the spurious chain is excluded from the range calculation using argument `excludedChains`. However, the statistics for this chain are still plotted.
 
 ## Combining the selected chains
 
-In the previous section, we selected chains 1, 2, 3, and 4, and we determined that chain 4 must be switched so that it conforms to the other three chains. A simple way to archive this information is to store it in a common-separated value file:
+In the previous section, for the first mode, we selected chains 1, 2, 3, and 4 for complete analysis, and we determined that chains 2 and 4 must be switched relative to chains 1 and 3. A simple way to archive this information is to store it in a common-separated value file:
 ```
 Chain,isSwitched
 1,F
-2,F
+2,T
 3,F
 4,T
 ```
@@ -199,13 +209,15 @@ The returned object `combinedChains` contains the 4 selected chains, using the f
 
 ## Checking convergence
 
-The convergence of the Monte Carlo sampling is evaluated with another package called "stanstan". The following code launches an application in your web browser.
+The convergence of the Monte Carlo sampling is evaluated with another package called "shinystan". The following code launches an application in your web browser.
 ```
 launch_shinystan(combinedChains)
 ```
-With this application, you can view various graphical and statistical summaries that indicate how well the sampling converged. Interpretation of these summaries is beyond the scope of the vignette; information on topic is available in Hoffman and Gelman (2013), Gelman and others (2014, p. 281-288) and Stan Development Team (2015). Limited information is available within application shinystan.
+With this application, you can view various graphical and statistical summaries that indicate how well the sampling converged. Interpretation of these summaries is beyond the scope of the vignette; information on topic is available in Hoffman and Gelman (2013), Gelman and others (2014, p. 281-288) and Stan Development Team (2015). Some information also is available within application shinystan.
 
-## Checking the model
+# Checking the model
+
+## Model fit to data
 
 The mean vectors, the standard deviation vectors, and the correlation matrices for the two pdfs in the finite mixture model may be checked by comparing them to equivalent statistics calculated from the principal components. To this end, it is necessary to calculate the conditional probability that a field sample is associated with pdf 1 in the finite mixture model. This calculation is performed with the following code.
 ```
@@ -214,51 +226,48 @@ save(condProbs1, file = "CondProbs1.dat")
 ```
 Container `condProbs1` is a matrix containing the Monte Carlo samples of the conditional probabilites and is described further in the package Help. 
 
-These conditional probabilites, along with the principal components, are used to calculate the the mean vectors, the standard deviation vectors, and the correlation matrices for the both pdfs in the finite mixture model. These statistics are called "observed test statistics" (Gelman and others, 2014, p. 145-146) because they are calculated from the observed data. This calculation is performed with the following code.
+These conditional probabilities, along with the principal components, are used to calculate the the mean vectors, the standard deviation vectors, and the correlation matrices for the both pdfs in the finite mixture model. These statistics are called "observed test statistics" (Gelman and others, 2014, p. 145-146) because they are calculated from the observed data, which are the first 22 principal components. This calculation is performed with the following code.
 ```
-obsTestStats <- calcObsTestStats(transData, nPCS, condProbs1)
+obsTestStats <- calcObsTestStats(transData, nPCs, condProbs1)
 save(obsTestStats, file = "ObsTestStats.dat")
 ```
 
-For Bayesian model checking, the observed test statistics are compared to replicated test statistics (Gelman and others, 2014, p. 143-153), which are derived from the samples of posterior pdf. For this application, the replicated test statistics are just the Monte Carlo samples of the mean vectors, the standard deviation vectors, and the correlation matrices. The comparison is chosen to be graphical. For the vectors, the comparison is performed with the following code.
+For Bayesian model checking, the observed test statistics are compared to replicated test statistics (Gelman and others, 2014, p. 143-153), which are derived from the samples of posterior pdf. For this application, the replicated test statistics are just the Monte Carlo samples of the mean vectors, the standard deviation vectors, and the correlation matrices. For the vectors, the comparison is performed with the following code.
 ```
-plotModelCheck_MS(combinedChains, obsTestQuantities)
+plotTMeanSd(combinedChains, obsTestStats)
 ```
 
-![Figure 7. Model check of (upper row) the mean vectors and (lower row) the standard devation vectors. A red dot represents an observed test statistic. A horizontal black line represents the median of associated Monte Carlo samples, and the vertical line represents its 95% credible interval. The numbers along the top of each plot are the p-values.](figures/Check_MS.png)
+![Figure 7. Model check of (a and b) the mean vectors and (c and d) the standard devation vectors for the first mode. A red dot represents an observed test statistic. A horizontal black line represents the median of associated Monte Carlo samples, and the vertical line represents its 95% credible interval. The numbers along the top of each plot are the posterior predictive p-values.](figures/Check_MS.png)
 
-In Figure 7, the distribution of the Monte Carlo samples for one model parameter (for example, component 1 of the mean vector for pdf 1) is summarized by the median and the 95% credible interval. The associated test statistic should be within the 95% credible interval, and ideally it should be close to the median. That is, the red dot should be within the interval defined by the vertical black line, and ideally it should be close to the horizonal black line. The p-values are explained later in this section.
-
+In Figure 7, the distribution of the Monte Carlo samples for one model parameter (for example, element 1 of the mean vector for pdf 1) is summarized by the median and the 95% credible interval. The associated test statistic should be within the 95% credible interval, and ideally it should be close to the median. That is, the red dot should be within the interval defined by the vertical black line, and ideally it should be close to the horizonal black line. Along the top of Figure 7 are the posterior predictive p-values (Gelman and others, 2014, p. 146), which quantify the relation betweeen the observed test statistic and the distribution of the replicated test statistic.
 
 For the correlation matrices, the comparison between the test statistics is performed with the following code.
 ```
-plotModelCheck_C(combinedChains, obsTestQuantities)
+plotTCorr(combinedChains, obsTestQuantities)
 ```
 
-![Figure 8. Model check for the correlation matrices. (upper left) Comparison of the observed test statistic (above the red diagonal) to the replicated test statistic (below the red diagonal) for pdf 1. (upper right) Associated p-values for pdf 1. (lower left and lower right) Corresponding graphics for pdf 2.](figures/Check_C.png)
+![Figure 8. Model check for the correlation matrices for pdf 1 (a and b) and for pdf 2 (c and d) for the first mode. In (a) and (c), the matrix comprises the upper triangle of the correlation matrix that is calculated from the principal components and the lower triangle of the correlation matrix that is the median of its Monte Carlo samples. In (b) and (d), the upper triangle comprises the posterior predictive p-values.](figures/Check_C.png)
 
-In Figure 8 (upper left), the replicated test statistic for, say, the correlation between components 5 and 2 is the median of the associated Monte Carlo samples. Figure 8 (upper right) shows the associated p-values, which are explained next. The color scale ranges from the smallest p-value to 0.5,
-which is the largest possible p-value.
+One part of the model check (Figure 8a and 8c) involves a matrix that combines an upper triangle and a lower triangle. The upper triangle is the upper triangle of the correlation matrix that is calculated from the principal components. The lower triangle is the lower triangle of the correlation matrix that is the median of its Monte Carlo samples. Consequently, an element in the upper triangle should be compared to the corresponding element in the lower triangle. For both pdfs, corresponding elements appear the same. The other part of the model check (Figure 8b and 8d) is a graphical display of the posterior predictive p-values for the off-diagonal elements of the correlation matrix. Because of the symmetry in the correlation matrix, only the p-values for, say, the upper triangle must be displayed. The color scale ranges from the smallest p-value to 0.5, which is the largest possible p-value. For both pdfs, the p-values are moderate to large. 
 
-A measure of the discrepancy between the observed test statistic and the replicated test statistic is the posterior predictive p-value (Gelman and others, 2014, p. 146). It is defined as the probability that the replicated test statistic could be more extreme that the observed test statistic. It mathematical terms, $p = Pr( T_r \geq T_o)$ where $T_r$ is the replicated test statistic and $T_o$ is the observed test statistic. When $T_o$ is in the left tail of the distribution for $T_r$, the p-value is close to 1. This situation can confuse the interpretation of the p-value. So, the mathematical definition is modified slightly: $p = Pr( T_r \leq T_o)$ (Gelman and others, 2014, p. 148). Consequently, the calculated p-value is always less than 0.5. and it may be interpreted in the standard way.
+The model checks of the mean vectors, the standard deviation vectors, and the correlation matrices (Figures 7 and 8) show that the model fits the data for the first mode. For the second mode, the results of model checks are very similar, so they are not discussed. 
 
-For this model check, all p-values (Figures 7 and 8) are moderate to large, indicating that the discrepancy between the test statistics is small. If there are many p-values that are less than approximately 0.1, the model may have difficiencies that require evaluation.
+## Model fit to geologic knowledge
 
-## Transforming back to the simplex
+### Transforming back to the simplex
 
-For each pdf in the finite mixture model, the samples of its mean vector, its standard deviation vector, and its correlation matrix are transformed to equivalent quantities in the simplex---namely, samples of the compositional mean vector and the variation matrix. This transformation is performed with the following code.
+For each pdf in the finite mixture model, the samples of its mean vector, its standard deviation vector, and its correlation matrix are transformed to equivalent quantities in the simplex---namely, samples of the compositional center and the variation matrix. This transformation is performed with the following code.
 ```
 simplexModPar <- backTransform(gcData, nPCs, transData, combinedChains)
 save( simplexModPar, file = "SimplexModPar.dat")
 ```
 
-# Cluster visualization
+### Cluster visualization
 
-## Setting the plotting order of the elements
+#### Setting the plotting order of the elements
 
 The order in which the elements are plotted is specified by a vector:
 ```
-# order in which the elements are plotted
 elementOrder <- c( "Sr", "U", "Y", "Nb", "La", 
                    "Ce", "Th", "Na", "Al", "Ga", 
                    "Be", "K", "Rb", "Ba", "Pb", 
@@ -266,74 +275,69 @@ elementOrder <- c( "Sr", "U", "Y", "Nb", "La",
                    "Co", "Fe", "V", "Ni", "Cr", 
                    "Ca", "P", "Ti", "Li", "Mn", 
                    "Sn", "As", "Bi", "Cd", "In", 
-                   "S",  "Sb", "Tl", "W")
+                   "S",  "Sb", "Tl", "W", "EE")
 ```
 The elements are specified by their common chemical abbreviations. Notice that the first letter is capitialized, and that the second letter (if any) is not. Using this vector, you can readily change the element order to improve cluster visualization.
 
-## Plotting the compositional mean
+####Plotting the compositional centers
 
-The compositional mean is a vector, in which each vector element corresponds to a chemical element. The Monte Carlo samples of this vector comprise Monte Carlo samples of each vector element, namely samples of the mean concentration of a chemical element. These samples are summarized by their median. (The compositional operation of closure is not applied to these medians.) The medians for both pdfs in the finite mixture model are plotted in the order specified by vector `element order`:
+The compositional center is a vector, in which each vector element corresponds to a chemical element. The Monte Carlo samples of this vector comprise Monte Carlo samples of each vector element, namely samples of the mean concentration of a chemical element. These samples are summarized by their median. (The compositional operation of closure is not applied to these medians.) The medians for both pdfs in the finite mixture model are plotted in the order specified by vector `element order`:
 ```
 plotCompMeans(simplexModPar, elementOrder)
 ```
 
-![Figure 9. Compositional means for the two pdfs. Each dot represents the median of the Monte Carlo samples for the associcated chemical element.](figures/CompMeans.png)
+![Figure 9. Compositional centers for the two pdfs. Each dot represents the median of the Monte Carlo samples for the associcated chemical element.](figures/CompMeans.png)
 
+The concentration for everything else "EE" is missing from this plot, which is the default for this function. This plot is useful for at least two reason. First, the compositional centers are expressed in terms of concentrations making it relatively easy to interpret them. Second, this plot can be directly compared to similar plots of compositional centers. In contrast, plots of standardized compositional centers, which are discussed next, may be compared only in certain cases. 
 
-This plot is useful for at least two reason. First, the compositional means are expressed in terms of concentrations making it relatively easy to interpret them. Second, this plot can be directly compared to similar plots of compositional means. In contrast, plots of standardized compositional means, which are discussed next, may be compared only in certain cases. 
+In this plot, the range of the element concentrations is very large, so it is sometimes difficult to discern how the compositional centers differ between the two pdfs. Moreover, it is desirable to add information to the plot about the distribution of the Monte Carlo samples, but this cannot be done easily because the range of the distribution is very small compared to the vertical axis. 
 
-In this plot, the range of the element concentrations is very large, so it is sometimes difficult to discern how the element concentrations differ between the two pdfs. Moreover, it is desirable to add information to the plot about the distribution of the Monte Carlo samples, but this cannot be done easily because the range of the distribution is very small compared to the vertical axis. 
-
-Both difficulties are overcome by standardizing the compositional means, which involves centering the compositional means and then scaling them (Pawlowsky-Glahn and others, 2105, p. 68-69). The parameters for centering and scaling are computed with function `calcSimplexStats`:
+Both difficulties are overcome by translating the compositional centers, which involves a simplex operation called "perturbation difference" (Pawlowsky-Glahn and others, 2105, p. 25). The composition that is used for the perturbation difference is the sample center for all field samples from the geochemical survey (Pawlowsky-Glahn et al., 2015, p. 66). This sample center is computed with function `calcSimplexStats`:
 ```
 simplexStats <- calcSimplexStats(gcData)
 save(simplexStats, file = "SimplexStats.dat")
 ```
-Function `plotStdCompMeans` uses these parameters to plot the standardized compositonal mean:
+It is helpful to interpret the operation of perturbation difference as a translation within the simplex. So, this simpler term is used from now on.
+Function `plotTransCompMeans` uses the simplex statistics to perform the translation and then plot it:
 ```
-plotStdCompMeans( simplexModPar, simplexStats, gcData, elementOrder)
+plotTransCompMeans( simplexModPar, simplexStats, gcData, elementOrder)
 ```
 
-![Figure 10. Standardized compositional means for the two pdfs. A dot represents the median of the Monte Carlo samples, and vertical line represents the 95% credible interval. The horizontal black line represents the barycenter.](figures/StdCompMeans.png)
+![Figure 10. Translated compositional centers for the two pdfs. Within a plot symbol, the dot represents the median of the Monte Carlo samples, and the vertical line represents the 95% credible interval. The horizontal black line represents the barycenter.](figures/StdCompMeans.png)
 
-For each chemical element, the median and the 95% credible interval summarize the distribution of the standardized compositional mean. The percentage for the credible interval can be changed using the argument `intervalPercentage`.
+The translated center for everything else "EE" is missing from this plot, which is the default for this function. For each chemical element, the median and the 95% credible interval summarize the distribution of its translated center. This plot readily shows how the translated compostional centers change between pdfs 1 and 2. For example, Figure 10 shows that element indium (In) is much higher in pdf 1 than it is in pdf 2. This information may be combined with the spatial distribution of the clusters, greatly facilitating the interpretation of the geochemical data. 
 
-This plot readily shows how the standardized element concentrations change between pdfs 1 and 2. For example, Figure 10 shows that element indium (In) is much higher in pdf 2 than it is in pdf 1. This information is combined with the spatial distribution of the clusters (which is discussed in [Mapping the clusters]), greatly facilitating the interpretation of the geochemical data. 
+This plot (Figure 10) depends upon the sample center that are used for the translation. Consequently, this plot can be compared only to other plots for which the same sample center.
 
-This plot depends upon the parameters that are used for the centering and scaling. Consequently, this plot can be compared only to other plots for which the same parameters are used. Because this processing is the first clustering of the Colorado data, there are no other plots. However, for subsequent clustering, there are such plots. This important issue is discussed further in section [Processing the clusters].
+#### Plotting the scaled variation matrices
 
-## Plotting the scaled variation matrices
-
-Monte Carlo samples of the variation matrix comprise Monte Carlo samples of its matrix elements. The samples of each matrix element are summarized by their median. This variation matrix with the medians is symmetric with respect to its diagonal. To prevent redundancy, the upper triangle of the variation matrix for pdf 1 and the lower triangle of the variation matrix for pdf 2 are combined into a single matrix. The combined variation matrix plotted:
+Monte Carlo samples of the variation matrix comprise Monte Carlo samples of its matrix elements. The samples of each matrix element are summarized by their median. This variation matrix with the medians is symmetric with respect to its diagonal. To prevent redundancy, the upper triangle of the variation matrix for pdf 1 and the lower triangle of the variation matrix for pdf 2 are combined into a single matrix. The combined variation matrix is plotted:
 ```
 plotSqrtVarMatrices( simplexModPar, elementOrder, colorScale = "spectrum" )
 ```
 
 ![Figure 11. Combined, scaled variation matrix. The upper triangle is the upper triangle from the variation matrix for pdf 1, and the lower triangle is the lower triangle from the variation matrix for pdf 2. The pixels represent scaled variances (namely, the standard deviations) of the log-ratios between the respective chemical elements.](figures/VarMatrix.png)
 
-The range of the variances in the matrix may be large, so the variances are scaled by the square root function. Consequently, the pixels in the Figure 11 represent standard deviations of the log-ratios between the respective chemical elements. Again, the order of the elements is specified by vector `element order`.
+The range of the variances in the matrix may be large, so the variances are scaled by the square root function. Consequently, the pixels in the Figure 11 represent standard deviations of the log-ratios between the respective chemical elements. Again, the order of the elements is specified by vector `element order`. The standard deviations associated with everything else "EE" are missing from this plot, which is the default for this function.
 
+#### Mapping the clusters
 
-## Mapping the clusters
+The conditional probabilities that the field samples are associated with pdf 1 were calculated in subsection [Model fit to data]. A map showing showing the spatial distribution of these associations is very helpful when interpreting the geochemical data. To this end, the conditional probabilities must be grouped into meaningful categories. 
 
-The conditional probabilities that the field samples are associated with pdf 1 was calculated in section [Checking the model]. A map showing showing the spatial distribution of these associations is very helpful when interpreting the geochemical data. To this end, the conditional probabilities must be grouped into meaning categories. 
-
-We have found that 4 categories are useful for interpetation. The first category indicates a strong association with pdf 1 and comprises those field samples for which the median conditional probabilities range from 0.9 to 1.0. The second category indicates a moderate association with pdf 1 and comprises those field samples for which the median conditional probabilities range from 0.5 to 0.9. The third category indicates a moderate association with pdf 2 (namely, a weak association with pdf 1) and comprises those field samples for which the median conditional probabilities range from 0.10 to 0.5. The fourth category indicates a strong association with pdf 2 (namely, a very weak association with pdf 1) and comprises those field samples for which the median conditional probabilities range from 0.0 to 0.1. These categories define clusters of the field samples, which can be plotted:
+We have found that 4 categories are useful for interpetation. The first category indicates a strong association with pdf 1 and comprises those field samples for which the median conditional probabilities range from 0.9 to 1.0. The second category indicates a moderate association with pdf 1 and comprises those field samples for which the median conditional probabilities range from 0.5 to 0.9. The third category indicates a moderate association with pdf 2 (namely, a weak association with pdf 1) and comprises those field samples for which the median conditional probabilities range from 0.10 to 0.5. The fourth category indicates a strong association with pdf 2 (namely, a very weak association with pdf 1) and comprises those field samples for which the median conditional probabilities range from 0.0 to 0.1. These categories define clusters of the field samples, which are plotted:
 ```
 map('state', regions = 'colorado', fill = TRUE, col = "gray60", border = "white")
 map.axes()
 plotClusters(gcData, condProbs1, symbolSizes = rep.int(2/3, 4))
 ```
 
-![Figure 12. Map of the clusters. Each dot represents the location of a field sample. Dot color represents the strength of the association between a field sample and a pdf in the finite mixture model: Blue and green indicate strong and moderate assocation, respectively, with pdf 1; red and yellow indicate strong and moderate association, respectively, with pdf 2.](figures/ClusterMap.png)
+![Figure 12. Map of the clusters. Each dot represents the location of a field sample. Dot color represents the strength of the association between a field sample and a pdf in the finite mixture model: Blue and green indicate strong and moderate association, respectively, with pdf 1; red and yellow indicate strong and moderate association, respectively, with pdf 2.](figures/ClusterMap.png)
 
-The number of categories and the related intervals of the median conditional probability are specified in argument `probIntervals` of function `plotClusters`. Likewise, the plot symbols, their sizes, and their colors may also be changed. However, we found that the default values for these arguments work well for many maps.
-
-The value of a cluster map becomes apparent when it is viewed with the standardized compositional means (Figure 10) and the scaled variation matrices (Figure 11). For example, the cluster of blue dots, which has a strong association with pdf 1, has higher concentrations of potassium (K), rubidium (Rb), barium (Ba), and arsenic (As) than the cluster of red dots does. In addition, the cluster of blue dots has lower variability in the log-ratios associated with K, Rb, Ba, and As than the cluster of red dots does. This information is then interpreted by relating it to independent information, such as geologic information.
+The number of categories and the related intervals of the median conditional probability are specified in argument `probIntervals` of function `plotClusters`. Likewise, the plot symbols, their sizes, and their colors may also be changed. However, we have found that the default values for these arguments work well for many maps.
 
 # Splitting the geochemical data
 
-The field samples in each cluster may processed to find finer-scale clusters. To this end, the field samples must be split, and this operation is accomplished with function `splitGcData`: 
+The field samples in each cluster may be processed to find finer-scale clusters. To this end, the field samples must be split, and this operation is accomplished with function `splitGcData`: 
 ```
 theSplits <- splitGcData(gcData, condProbs1, threshold = 0.10 )
 ```
@@ -351,15 +355,11 @@ save( gcData, file = "..\\Process11\\gcData.dat" )
 gcData <- theSplits$gcData2
 save( gcData, file = "..\\Process12\\gcData.dat" )
 ```
-Observe that both list elements are renamed `gcData` so that the R-language scripts, that are used for processing, do not need editting. 
+Observe that both list elements are renamed `gcData` so that the R-language scripts, that are used for processing, do not need editting. The geochemical data in "Process11" and "Process12" are clustered by applying  the clustering procedure that already has been described in this user's guide.
 
-# Processing the splits
+# Miscellaneous issues
 
-The geochemical data in "Process11" and "Process12" are clustered by applying  the processing that already has been described in this user's guide. There are only two issues that require further discussion. 
-
-First, in section [Plotting the compositional mean], the plot of the standardized compositional mean was created using standardization statistics that were calculated from the geochemical data that were being processed (namely, the geochemical data for the entire survey area). When the plot of the standardized compositional mean is created for, say, "Process11", the standardization statistics likewise could be calculated from the data in "Process11". Although such a plot is invaluable for interpretation, the resulting plot cannot be compared to corresponding plots for other clusters. To overcome this problem, additional plots of the standardized compositional mean may be created using standardization statistics that were generated within "Process1"; these plots can be compared to one another.
-
-The second issue is deciding when to stop the clustering. Heretofore, our experience has been that when the number of field samples in a cluster is about 250 or 300, then the Monte Carlo sampling does not converge. Consequently, we have stopped. As we gain more experience, then this criterion probably be replaced with better criteria.
+There are two issues that require further discussion. First, in subsection [Plotting the compositional centers], the plot of the translated compositional centers was created using the sample center of the geochemical data for the entire data set. It is possible to generate these plots using another sample center, such as the sample center of the current subset of geochemical data. However, you should compared only those plots translated by the same sample center. Second, our experience has been that when the number of field samples in a cluster is about 250 or 300, then the Monte Carlo sampling does not converge. Consequently, we stoped the hierarchical clustering. As we gain more experience, this criterion will be refined.
 
 # References
 Hoffman, M., and Gelman, A., 2013, The no-U-turn sampler-Adaptively setting path lengths in Hamiltonian Monte Carlo, available on line at http://arxiv.org/abs/1111.4246 (last accessed November 2015).
