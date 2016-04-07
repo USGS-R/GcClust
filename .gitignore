@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+Communication
+.Rbuildignore
+Backup
+data-raw
+inst/doc
+StanModel

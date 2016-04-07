@@ -14,7 +14,7 @@
 #' The data are from Smith and others (2010); selected summary statistics of
 #' these data are presented in Ellefsen and others (2014).
 #'
-#' These data have been editted to make them suitable for
+#' These data have been edited to make them suitable for
 #' analysis. First, field sample "06co437" has been deleted because
 #' it has an anomalously high copper concentration.
 #' Second, elements silver (Ag), cesium (Cs), mercury (Hg),
@@ -35,7 +35,7 @@
 #' scaled, as necessary, so that the units for all concentrations are "mg/kg"
 #' or equivalently "ppm".
 #'
-#' After this editting, there are 959 field samples for which
+#' After this editing, there are 959 field samples for which
 #' 39 element concentrations are reported.
 #' The locations of the field samples are specified by lattitude and longitude
 #' using the WGS84 datum.

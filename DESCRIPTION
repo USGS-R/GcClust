@@ -1,17 +1,27 @@
 Package: GcClust
 Type: Package
-Title: Clustering field samples of geochemical data with HMC sampling
-Version: 0.1
-Date: 2015-09-17
+Title: Clustering geochemical data with HMC sampling
+Version: 1.0
+Date: 2016-01-20
 Authors@R: c( person("Karl", "Ellefsen", email = "ellefsen@usgs.gov",
             role = c("aut", "cre")),
             person("David", "Smith", email = "dsmith@usgs.gov",
             role = c("aut")))
-Description: Clusters field samples of geochemical data using a finite mixture model.
-Depends: R (>= 3.02)
+Description: GcClust is a software package for statistical clustering of
+    regional geochemical data, and similar data such as regional mineralogical
+    data. The clustering procedure partitions the field samples for a data set
+    into two clusters. Each cluster is partitioned again to create two
+    sub-clusters, and so on, generating a hierarchy of clusters.
+    The clustering method is based on a
+    Bayesian finite mixture model. The model parameters are estimated with
+    Hamiltonian Monte Carlo sampling of the posterior probability density
+    function.
+Depends:
+    R (>= 3.02)
 License: CC0
 LazyData: TRUE
-Imports: colorspace,
+Imports:
+    colorspace,
     ggplot2,
     grid,
     mvtnorm,
@@ -20,6 +30,8 @@ Imports: colorspace,
     robustbase,
     rstan (>= 2.8.0),
     sp
-Suggests: knitr,
+Suggests:
+    knitr,
     rmarkdown
 VignetteBuilder: knitr
+RoxygenNote: 5.0.1

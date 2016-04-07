@@ -31,7 +31,7 @@
 #' are transformed to isometric log-ratio (ilr) coordinates. This
 #' transformation is described in Pawlowsky-Glahn et al. (2015, p. 36-38).
 #' Second, the ilr coordinates are transformed to robust principal coordinates.
-#' This transformation is decribed in Filzmoser et al. (2009).
+#' This transformation is described in Filzmoser et al. (2009).
 #' The transformation requires a mean vector and a covariance matrix; robust
 #' values for these two statistics are calculated using function covMcd from
 #' package robustbase. One argument to function covMcd is \code{alpha}, which is
@@ -42,7 +42,7 @@
 #' and matrices for which the dimensions depend on two quantities: The number
 #' of field samples, N, and the number of geochemical concentrations reported
 #' for
-#' each field sample, D. (D includes the amalagmated concentration for "EE".)
+#' each field sample, D. (D includes the amalgamated concentration for "EE".)
 #' @return \item{Psi}{Contrast matrix that is used for the ilr transformation.
 #' The matrix dimensions are (D-1) x D.}
 #' @return \item{ilrCoefs}{Matrix of ilr coefficients (coordinates) resulting
@@ -133,19 +133,19 @@ transformGcData <- function(gcData, alpha = 0.98) {
 #' This list is return by function \code{\link{transformGcData}}, for which the
 #' documentation includes a complete description of container \code{transData}.
 #' @param relOffset  Scalar specifying the relative distance that each
-#' percentage of cummulative variance (see Details) is offset from the top
+#' percentage of cumulative variance (see Details) is offset from the top
 #' of its respective bar.
 #' @param size  Scalar specifying the text size for the percentage of
-#' cummulative variance (see Details).
+#' cumulative variance (see Details).
 #'
 #' @details
 #' In principal component analysis, this plot is called a "scree plot."
 #'
 #' The variance for each component is represented by a bar, and above each
-#' bar is the cummulative percentage of total variance. The total variance
+#' bar is the cumulative percentage of total variance. The total variance
 #' is the sum of the variances for each component. The percentage of variance
 #' associated a component is its variance divided by the total variance
-#' times 100. The cummulative percentage of total variance for component k
+#' times 100. The cumulative percentage of total variance for component k
 #' is the sum of the percentages from component 1 to component k.
 #'
 #' @references
@@ -162,7 +162,7 @@ plotEdaVar <- function(transData, relOffset = 0.04, size = 3) {
 
   variances <- transData$robustEigenvalues
   tmp <- 100 * cumsum( variances ) / sum( variances )
-  # cPTV: cummulative percentage of total variance
+  # cPTV: cumulative percentage of total variance
   varInfo <- data.frame(component = 1:length(variances),
                         variances = variances,
                         cPTV = as.character( round( tmp, digits=2 )),
@@ -336,7 +336,7 @@ plotEdaCorr <- function(transData) {
 #'  \item{
 #' The second element pertains to the prior pdf for the elements of mu1 and
 #' mu2, which are the mean vectors in the finite mixture model. The prior pdf
-#' is a normal pdf, for which the mean is 0 and the standard devation is
+#' is a normal pdf, for which the mean is 0 and the standard deviation is
 #' specified by priorParams[2]. Of course, priorParams[2] must be greater than 0.
 #'  }
 #'  \item{
@@ -397,7 +397,7 @@ plotEdaCorr <- function(transData) {
 #' }
 #' Each \code{stanfit} object is written to its own file in
 #' directory \code{procDir}.
-#' A file names has the form "RawSamples?-?.dat" for which the first
+#' A file name has the form "RawSamples?-?.dat" for which the first
 #' question mark is replaced by the core number and the the second question
 #' mark replaced by the chain number for the specified core.
 #' The important point is that the file name is unique.
@@ -1142,7 +1142,7 @@ calcObsTestStats <- function(transData, nPCs, condProbs1) {
 #' plot. The p-value is defined as the probability
 #' that the test statistic for the
 #' replicated data could be more extreme that the test statistic for the
-#' observed data (Gelman et al., 2014, p. 146). It mathematical
+#' observed data (Gelman et al., 2014, p. 146). In mathematical
 #' terms, pvalue = Pr( T.rep >= T.obs).
 #' The p-value is close to 1 when T.obs is in the left tail of the
 #' distribution for T.rep. This can confuse the interpretation of the p-value,
@@ -1255,7 +1255,7 @@ plotTMeanSd <- function( combinedChains, obsTestStats,
 #'
 #' @details
 #' The plot of the test statistics appears as a 2x2 matrix. The first and second
-#' rows pertain to the first and second pdfs of the finte mixture model.
+#' rows pertain to the first and second pdfs of the finite mixture model.
 #' The first column
 #' presents comparisons of the correlation matrices.  For each pdf, the
 #' comparison is a composite of the upper triangle of the
@@ -1282,7 +1282,7 @@ plotTMeanSd <- function( combinedChains, obsTestStats,
 #' the posterior predictive p-value. The p-value is defined as the probability
 #' that the test statistic for the
 #' replicated data could be more extreme that the test statistic for the
-#' observed data (Gelman et al., 2014, p. 146). It mathematical
+#' observed data (Gelman et al., 2014, p. 146). In mathematical
 #' terms, pvalue = Pr( T.rep >= T.obs).
 #' The p-value is close to 1 when T.obs is in the left tail of the
 #' distribution for T.rep. This can confuse the interpretation of the p-value,
@@ -1408,7 +1408,7 @@ plotTCorr <- function( combinedChains, obsTestStats) {
 #'
 #' @description Back transform the mean vectors and covariance matrices
 #' of the finite mixture model to the corresponding quantities for the simplex
-#' (that is, compostional means and variation matrices).
+#' (that is, compositional means and variation matrices).
 #'
 #' @param gcData
 #' List containing the geochemical and related data. This container is
@@ -1614,6 +1614,10 @@ calcSimplexStats <- function(gcData) {
 #' @param symbolSize
 #' The size of the plotting symbol.
 #'
+#' @param yLimits
+#' Vector of length 2 specifying the limits of the y-axis. If an element is NA
+#' then ggplot computes the corresponding axis limit.
+#'
 #' @param isEePlotted
 #' Logical variable specifying whether the amalgamated concentration "EE",
 #' which accounts for all omitted and unmeasured element concentrations, is
@@ -1622,7 +1626,7 @@ calcSimplexStats <- function(gcData) {
 #' @details
 #' The compositional means for each pdf, which are within container
 #' simpleModPar, are translated by sample center, which is within
-#' container simplexStats. (Alternatively, the user can pick a compostion to
+#' container simplexStats. (Alternatively, the user can pick a composition to
 #' perform the translation that is
 #' most helful to the interpretation.) The translation is
 #' the simplex operation that is called "perturbation difference"
@@ -1652,9 +1656,10 @@ calcSimplexStats <- function(gcData) {
 #' }
 #'
 #' @export
-plotTransCompMeans <- function(simplexModPar, simplexStats, gcData, elementOrder,
-                          intervalPercentage = 95, symbolSize = 0.75,
-                          isEePlotted = FALSE) {
+plotTransCompMeans <- function(simplexModPar, simplexStats, gcData,
+                               elementOrder, intervalPercentage = 95,
+                               symbolSize = 0.75, yLimits = NULL,
+                               isEePlotted = FALSE) {
 
   Internal1 <- function(compMeans, center, constSumValue, elementOrder,
                         interval, pdf, isEePlotted ) {
@@ -1708,7 +1713,12 @@ plotTransCompMeans <- function(simplexModPar, simplexStats, gcData, elementOrder
     ggplot2::scale_colour_manual(values=c("blue","red")) +
     ggplot2::geom_hline(ggplot2::aes(yintercept=barycenter)) +
     ggplot2::geom_pointrange(size=symbolSize) +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(colour = "black")) +
     ggplot2::ylab("Translated concentrations (no units)")
+
+  if(!is.null(yLimits)) {
+    w <- w + ggplot2::ylim(yLimits)
+  }
 
   print(w)
 
@@ -1740,6 +1750,10 @@ plotTransCompMeans <- function(simplexModPar, simplexStats, gcData, elementOrder
 #' @param symbolShape
 #' The shape of the plotting symbol.
 #'
+#' @param yLimits
+#' Vector of length 2 specifying the limits of the y-axis. If an element is NA
+#' then ggplot computes the corresponding axis limit.
+#'
 #' @param isEePlotted
 #' Logical variable specifying whether the amalgamated concentration "EE",
 #' which accounts for all omitted and unmeasured element concentrations, is
@@ -1757,6 +1771,7 @@ plotTransCompMeans <- function(simplexModPar, simplexStats, gcData, elementOrder
 #' @export
 plotCompMeans <- function(simplexModPar, elementOrder,
                           symbolSize = 2, symbolShape = 1,
+                          yLimits = NULL,
                           isEePlotted = FALSE) {
 
   Internal1 <- function(compMeans, elementOrder, pdf, isEePlotted) {
@@ -1794,6 +1809,10 @@ plotCompMeans <- function(simplexModPar, elementOrder,
     ggplot2::geom_point(size=symbolSize, shape = symbolShape) +
     ggplot2::ylab("Concentration (mg/kg)")
 
+  if(!is.null(yLimits)) {
+    w <- w + ggplot2::ylim(yLimits)
+  }
+
   print(w)
 
 }
@@ -1818,9 +1837,13 @@ plotCompMeans <- function(simplexModPar, elementOrder,
 #'
 #' @param elementOrder
 #' Vector specifying the order in which the elements are plotted.
+#'
 #' @param colorScale
 #' Character string specifying the color scale for
 #' the plot. The choices are either "spectrum" (default) and "rainbow."
+#'
+#' @param scaleRange
+#' Vector of length 2 specifying the range of the color scale.
 #'
 #' @param isEePlotted
 #' Logical variable specifying whether the amalgamated concentration "EE",
@@ -1836,7 +1859,7 @@ plotCompMeans <- function(simplexModPar, elementOrder,
 #' between the respective chemical elements. The scaling is desirable because
 #' it reduces the large range of the variances, making it easier to
 #' visualize all of the variances together. The scaling function is the
-#' square root; so, the pixels represent standard devations
+#' square root; so, the pixels represent standard deviations
 #' of the log-ratios between the respective chemical elements.
 #'
 #' @references
@@ -1850,7 +1873,8 @@ plotCompMeans <- function(simplexModPar, elementOrder,
 #'
 #' @export
 plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
-                                colorScale = "spectrum", isEePlotted = FALSE ) {
+                                colorScale = "spectrum", scaleRange = NULL,
+                                isEePlotted = FALSE ) {
 
   # D is the standard notation, and is concise.
   D <- dim(simplexModPar$varMatrix1)[3]
@@ -1887,6 +1911,14 @@ plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
   Z <- reshape2::melt(Z)
   Z <- na.omit(Z)
 
+  zRange <- range(Z$value)
+  cat(sprintf("The range of matrix elements: %10.3g  %10.3g\n",
+              zRange[1], zRange[2]))
+
+  if(is.null(scaleRange)) {
+    scaleRange <- zRange
+  }
+
   w <- ggplot2::ggplot(Z, ggplot2::aes(Var2, Var1)) +
     ggplot2::geom_tile(data=Z, ggplot2::aes(fill=value), color="white") +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle=90,vjust=0.25,colour = "black")) +
@@ -1901,11 +1933,11 @@ plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
     myPalette <- colorRampPalette( c("blue", "green", "yellow", "orange", "red"),
                                    space="rgb", interpolate="linear" )
 
-    w <- w + ggplot2::scale_fill_gradientn(limit=range(Z$value),
+    w <- w + ggplot2::scale_fill_gradientn(limit=scaleRange,
                                            colours = myPalette(10),
                                            name="Std dev")
   } else if(colorScale == "rainbow") {
-    w <- w + ggplot2::scale_fill_gradientn(limit=range(Z$value),
+    w <- w + ggplot2::scale_fill_gradientn(limit=scaleRange,
                                            colours = rev(colorspace::rainbow_hcl(7)),
                                            name="Std dev")
   } else {
@@ -1933,7 +1965,7 @@ plotSqrtVarMatrices <- function(simplexModPar, elementOrder,
 #' A matrix containing the Monte Carlo samples of the
 #' conditional probabilities. This matrix is returned by function
 #' \code{\link{calcCondProbs1}}, for which the documentation includes a
-#' complete descriptoin of container \code{condProbs1}.
+#' complete description of container \code{condProbs1}.
 #'
 #' @param probIntervals Vector containing intervals of conditional
 #' probability. All field samples within an given interval are plotted the same
@@ -2044,7 +2076,7 @@ plotClusters <- function(gcData, condProbs1,
 #' A matrix containing the Monte Carlo samples of the
 #' conditional probabilites. This matrix is returned by function
 #' \code{\link{calcCondProbs1}}, for which the documentation includes a
-#' complete descriptoin of container \code{condProbs1}.
+#' complete description of container \code{condProbs1}.
 #'
 #' @param threshold
 #' The threshold used to split the data into two groups. (See details.)
@@ -2055,21 +2087,34 @@ plotClusters <- function(gcData, condProbs1,
 #' probability
 #' is calculated. If this median is between 1-threshold and 1, then the
 #' field sample is associated with pdf 1 in the finite mixture model. However,
-#' if this median is between 0 and threshold, then the field samples is
+#' if this median is between 0 and threshold, then the field sample is
 #' associated with pdf 2 in the finite mixture model. This criterion is
 #' used to split the field samples into two groups.
 #'
 #' Argment \code{threshold} must be greater than 0 and less than 0.5.
 #'
-#' @return A list with two components is returned.
+#' @return A list with four components is returned.
 #' @return \item{gcData1}{List containing the geochemical and related data that
 #' are associated with pdf 1. The format of this container is the same
 #' as the format of \code{gcData} and is described in the package
 #' documentation.}
+#' @return \item{analysisData1}{Dataframe containing data that are helpful in
+#' analyzing the samples associated with pdf 1. The data are the sample
+#' number, the conditional probability associated with the sample, the
+#' longitude, and the latitude.}
 #' @return \item{gcData2}{List containing the geochemical and related data that
 #' are associated with pdf 2. The format of this container is the same
 #' as the format of \code{gcData} and is described in the package
 #' documentation.}
+#' @return \item{analysisData2}{Dataframe containing data that are helpful in
+#' analyzing the samples associated with pdf 2. The data are the sample
+#' number, the conditional probability associated with the sample, the
+#' longitude, and the latitude.}
+#' The information in components \code{analysisData1} and \code{analysisData2}
+#' is also in components \code{gcData1} and \code{gcData2}, except for the
+#' conditional probabilities. The reason for generating these containers with
+#' redundant information is that their format is simple, so that the containers
+#' can be passed to other programs for further analysis.
 #'
 #' @examples
 #' \dontrun{
@@ -2091,11 +2136,22 @@ splitGcData <- function(gcData, condProbs1, threshold = 0.10 ) {
                  censorIndicators = gcData$censorIndicators[areInPdf1, ],
                  constSumValue = gcData$constSumValue )
 
+  analysisData1 <- data.frame( sampleName = rownames(gcData1$concData@data),
+                    conditionalProb = g[areInPdf1],
+                    Longitude = gcData1$concData@coords[, 1],
+                    Latitude = gcData1$concData@coords[, 2] )
+
   gcData2 <- list(concData = gcData$concData[areInPdf2, ],
                  censorIndicators = gcData$censorIndicators[areInPdf2, ],
                  constSumValue = gcData$constSumValue )
 
-  return( list(gcData1 = gcData1, gcData2 = gcData2))
+  analysisData2 <- data.frame( sampleName = rownames(gcData2$concData@data),
+                               conditionalProb = g[areInPdf2],
+                               Longitude = gcData2$concData@coords[, 1],
+                               Latitude = gcData2$concData@coords[, 2] )
+
+  return( list(gcData1 = gcData1, analysisData1 = analysisData1,
+               gcData2 = gcData2, analysisData2 = analysisData2))
 
 }
 
