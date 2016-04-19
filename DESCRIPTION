@@ -16,6 +16,11 @@ Description: GcClust is a software package for statistical clustering of
     Bayesian finite mixture model. The model parameters are estimated with
     Hamiltonian Monte Carlo sampling of the posterior probability density
     function.
+    This software is in the public domain because it contains materials that
+    originally came from the United States Geological Survey, an agency of the
+    United States Department of Interior. For more information, see the
+    official USGS copyright policy at
+    http://www.usgs.gov/visual-id/credit_usgs.html#copyright
 Depends:
     R (>= 3.02)
 License: CC0

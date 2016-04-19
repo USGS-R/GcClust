@@ -1,5 +1,3 @@
-
-
 #' @title Transform the geochemical data
 #'
 #' @description Transform the geochemical data first with the
