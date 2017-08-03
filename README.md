@@ -1,3 +1,8 @@
+GcClust
+=======
+
+[![status](https://img.shields.io/badge/USGS-Research-blue.svg)](https://owi.usgs.gov/R/packages.html#research)
+
 GcClust is a software package for statistical clustering of regional geochemical data, and similar data such as regional mineralogical data. The clustering procedure partitions the field samples for a data set into two clusters. Each cluster is partitioned again to create two sub-clusters, and so on, generating a hierarchy of clusters. The clustering method is based on a Bayesian finite mixture model. The model parameters are estimated with Hamiltonian Monte Carlo sampling of the posterior probability density function.
 
 The functions that implement the clustering, the documentation of the functions, and a user’s guide that describes each step of the clustering are bundled together in an “R package,” which is the unit of sharable code for the R statistical programming language.
