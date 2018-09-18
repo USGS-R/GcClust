@@ -46,13 +46,13 @@
 #' Ellefsen, K.J., Smith, D.B., Horton, J.D., 2014, A modified procedure
 #' for mixture-model clustering of regional geochemical data: Applied
 #' Geochemistry, vol. 51, p. 315-326,
-#' doi: http://dx.doi.org/10.1016/j.apgeochem.2014.10.011.
+#' doi: https://doi.org/10.1016/j.apgeochem.2014.10.011.
 #'
 #' Palarea-Albaladejo, J., Martin-Fernandez, J.A., Buccianti, A., 2014,
 #' Compositional methods for estimating elemental concentrations below
 #' the limit of detection in practice using R: Journal of Geochemical
 #' Exploration, vol. 141, p. 71-77,
-#' doi: http://dx.doi.org/10.1016/j.gexplo.2013.09.003.
+#' doi: https://doi.org/10.1016/j.gexplo.2013.09.003.
 #'
 #' Smith, D.B., Ellefsen, K.J., and Kilburn, J.E., 2010,
 #' Geochemical data for Colorado soils-Results from the 2006
